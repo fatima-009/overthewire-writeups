@@ -21,7 +21,13 @@ Focuses on web application security: source code review, HTTP headers, cookies, 
 
 | Level | Topic |
 | --- | --- |
-| — | *(coming soon)* |
+| [1 → 2](./natas/level-1-2.md) | Bypassing client-side right-click/devtools blocks via view-source |
+| [2 → 3](./natas/level-2-3.md) | Exposed directory listing via a linked image path |
+| [3 → 4](./natas/level-3-4.md) | Sensitive paths leaked through `robots.txt` |
+| [4 → 5](./natas/level-4-5.md) | Spoofing the `Referer` header |
+| [5 → 6](./natas/level-5-6.md) | Bypassing a client-controlled `loggedin` cookie |
+
+*(more levels added as they're solved)*
 
 ## 🛠️ Skills Practiced
 
@@ -39,6 +45,11 @@ overthewire-writeups/
 │   ├── level-1-2.md
 │   └── ...
 ├── natas/
+│   ├── level-1-2.md
+│   ├── level-2-3.md
+│   ├── level-3-4.md
+│   ├── level-4-5.md
+│   ├── level-5-6.md
 │   └── ...
 └── README.md
 ```
@@ -47,4 +58,4 @@ overthewire-writeups/
 
 Written by [Fatima Basharat](https://github.com/fatima-009) while learning Linux fundamentals and web security alongside full-stack development.
 
-> Note: Passwords for each level are intentionally omitted or partially masked in these writeups — the focus is on the method, not the answer.# overthewire-writeups
+> Note: Passwords for each level are intentionally omitted or partially masked in these writeups — the focus is on the method, not the answer.
