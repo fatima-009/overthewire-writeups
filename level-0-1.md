@@ -1,88 +1,36 @@
-# OverTheWire Bandit — Level 0 → 1
+## OverTheWire: Natas — Level 0 to Level 1 Writeup
 
-## Objective
+Natas is a beginner-friendly web security wargame from OverTheWire. Each level is a webpage where you need to find a password hidden somewhere (in the HTML source, cookies, headers, etc.) to move on to the next level. Here's how to solve the first two levels.
 
-The goal of this level is to find the password for **Bandit Level 1**.
+## Level 1
 
-After logging into Bandit Level 0, the password for the next level is stored in a file named `readme`, located in the home directory.
+**Goal: Same idea as Level 0, but with a small twist — right-click is disabled.**
 
-## Step 1: Check the Files
+- Go to: http://natas1.natas.labs.overthewire.org
+- Log in with:  
+    Username: natas1
+    Password: (the one you found in Level 0)
 
-After logging into Bandit Level 0 with:
+- This time, if you try to right-click, nothing happens — the page has JavaScript blocking the context menu. But this is only a cosmetic restriction; it doesn't actually stop you from viewing the source. You can bypass it in a few ways:
 
-```bash
-ssh bandit0@bandit.labs.overthewire.org -p 2220
-```
+*Keyboard shortcut:* 
+Press Ctrl+U (or Cmd+Option+U on Mac) directly — this works even if right-click is disabled.
+*Browser menu:* 
+Go to your browser's menu (⋮ or ☰) → "More Tools" → "View Source" (varies by browser).
+*Developer Tools:* 
+Press 'F12' or 'Ctrl+Shift+I' to open DevTools and look at the "Elements" tab.
+*URL trick:* 
+Type "view-source:http://natas1.natas.labs.overthewire.org" directly in the address bar.
 
-run:
+- Just like before, look through the HTML for an embedded comment containing the password for natas2.
 
-```bash
-ls
-```
+**Lesson learned:**
+Disabling right-click is a weak, purely client-side "protection." It doesn't actually secure anything since the browser still downloads and renders the full HTML/JS — you can always access it through other means. Never rely on hiding the "view source" option as a real security measure.
 
-The `ls` command lists the files and directories in the current directory.
+*Quick Tips Going Forward*
 
-You should see:
+- Always check: page source, cookies, HTTP response headers, and any linked JS/CSS files — passwords and hints are often hidden in these.
+- Use browser DevTools (F12) heavily; it's your main tool throughout Natas.
+- Keep a text file noting down each level's password as you go, since you'll need the previous level's password to log into the next one.
 
-```text
-readme
-```
-
-This means there is a file named `readme` in the home directory.
-
-## Step 2: Read the File
-
-Run:
-
-```bash
-cat readme
-```
-
-The `cat` command displays the contents of a file directly in the terminal.
-
-## Step 3: Get the Password
-
-The output of `cat readme` will show a long string of letters and numbers. That string is the password for **Bandit Level 1**.
-
-## Step 4: Log Out and Log Into Level 1
-
-Disconnect from Level 0:
-
-```bash
-exit
-```
-
-Then connect to Level 1 using the new password:
-
-```bash
-ssh bandit1@bandit.labs.overthewire.org -p 2220
-```
-
-When prompted for the password, enter the password you copied from the `readme` file.
-
-## Important Commands
-
-### List files
-
-```bash
-ls
-```
-
-Used to see files and directories in the current location.
-
-### Read a file
-
-```bash
-cat filename
-```
-
-Used to display the contents of a file.
-
-## What We Learned
-
-In this level, we learned:
-
-1. How to list files using `ls`.
-2. How to read a file's contents using `cat`.
-3. That passwords for the next level are often stored in plain readable files.
-4. How to log out of one level and log into the next using a new password.
+Good luck with Level 2 onward — the levels start introducing PHP source code review, cookies, and basic injection concepts soon after this!
