@@ -1,143 +1,47 @@
-# OverTheWire Bandit — Level 1-2
+## Natas Level 1 → Level 2
 
-## Objective
+*Goal: Find the password for natas3. The page literally just says "There is nothing on this page", which is your clue to look deeper than the rendered HTML.*
 
-The goal of Level 1 is to find the password for the next level.
+## Step 1: Access the level
 
-The password is stored in a file named:
+http://natas2.natas.labs.overthewire.org
 
-```text
--
-```
+Username: natas2
+Password: (from level 1)
 
-This file is located in the current directory.
+## Step 2: View the page source
 
-## Step 1: Check the Files
+Even though the page looks empty, check the source (view-source: or Ctrl+U). You'll notice an <img> tag pointing to:
 
-After logging into Bandit Level 1, run:
+html
+<img src="files/pixel.png">
 
-```bash
-ls
-```
+## Step 3: Browse the files directory
 
-The `ls` command lists the files and directories in the current directory.
+Since there's a files/ folder referenced, browse to it directly:
 
-You should see:
+*http://natas2.natas.labs.overthewire.org/files/*
 
-```text
--
-```
+This directory listing is open, and you'll see more than just pixel.png — there's also a file called:
 
-This means there is a file named `-`.
+*users.txt*
 
-## Step 2: Understand the Problem
+## Step 4: Read users.txt
 
-At first, we might try:
+Open it:
 
-```bash
-cat -
-```
+http://natas2.natas.labs.overthewire.org/files/users.txt
 
-The `cat` command is normally used to display the contents of a file.
+Inside, you'll find a list of usernames and passwords, including one like:
 
-However, `-` has a special meaning in many Linux commands. It can be interpreted as **standard input** instead of a filename.
+natas3:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-Therefore, `cat -` may not read the file we want.
+## Step 5: Log in to Level 3
 
-## Step 3: Read the File Correctly
+Username: natas3
+Password: <password found above>
+URL: http://natas3.natas.labs.overthewire.org
 
-We can tell Linux that `-` is a file in the current directory by adding `./` before the filename:
+*Lesson learned*
 
-```bash
-cat ./-
-```
-
-### What does `./` mean?
-
-`./` means:
-
-> **The current directory**
-
-So:
-
-```text
-./-
-```
-
-means:
-
-> The file named `-` in the current directory.
-
-
-## Step 4: Get the Password
-
-Run:
-
-```bash
-cat ./-
-```
-
-The command will display the password stored inside the file.
-
-The password shown by your terminal is the password you need for **Bandit Level 2**.
-
-
-## Why Does `cat ./-` Work?
-
-Linux commands often treat a filename beginning with `-` as an option.
-
-For example, a command might interpret:
-
-```text
-- 
-```
-
-as a special argument rather than as a filename.
-
-By writing:
-
-```text
-./-
-```
-
-we provide a path to the file instead of simply giving the filename.
-
-This removes the ambiguity.
-
-
-## Important Commands
-
-### List files
-
-```bash
-ls
-```
-
-Used to see files and directories.
-
-### Read a file
-
-```bash
-cat filename
-```
-
-Used to display the contents of a file.
-
-### Read a file named `-`
-
-```bash
-cat ./-
-```
-
-The `./` tells Linux that `-` is the filename located in the current directory.
-
-
-## What We Learned
-
-In this level, we learned:
-
-1. How to list files using `ls`.
-2. How to read files using `cat`.
-3. What `./` means in Linux.
-4. Why filenames beginning with `-` can cause problems.
-5. How to explicitly specify a file using its path.
+Referencing static assets (like images) from a subdirectory can accidentally expose that entire directory if directory listing is enabled and permissions aren't locked down. Always check linked paths and directory indexes — sensitive files are often left sitting in plainly guessable locations.
