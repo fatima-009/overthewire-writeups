@@ -1,59 +1,51 @@
-## OverTheWire Bandit: Level 2 → Level 3
-## Objective
+## Natas Level 2 → Level 3
 
-The goal of this level is to log in to the next level using the password stored in a file named --spaces in this filename--.
+*Goal: Find the password for natas4. This level teaches that robots.txt can leak hidden paths even if a page looks empty.*
 
-## Steps
+**Step 1: Access the level**
 
-First, I checked the files in the current directory:
+http://natas3.natas.labs.overthewire.org
 
-```bash
-ls
-```
+Username: natas3
+Password: (from level 2)
 
-The output showed a file named:
+**Step 2: Inspect the page**
 
-```bash
---spaces in this filename--
-```
+Again, the page appears to say "There is nothing on this page" — but this time, checking the plain HTML source doesn't reveal anything obvious like an image path.
 
-Since the filename starts with --, simply using cat --spaces in this filename-- would cause the command to interpret the filename as an option.
+**Step 3: Check robots.txt**
 
-To safely access a filename that starts with -, I used ./ before the filename:
+Since search engine crawler rules are a classic place developers accidentally disclose hidden paths, check:
 
-```bash
-cat ./--spaces\ in\ this\ filename--
-```
+*http://natas3.natas.labs.overthewire.org/robots.txt*
 
-Alternatively, the filename can be enclosed in quotes:
+You'll find something like:
 
-```bash
-cat "./--spaces in this filename--"
-```
+User-agent: *
+Disallow: /s3cr3t/
 
-The command displayed the password for the next level.
+**Step 4: Browse the disallowed directory**
 
-## Key Concept
+*http://natas3.natas.labs.overthewire.org/s3cr3t/*
 
-This level demonstrates how to work with filenames that contain spaces and begin with hyphens.
+Directory listing is enabled here too, and you'll see a file:
 
-Two useful techniques are:
+users.txt
 
-Escape spaces using \
+**Step 5: Read users.txt**
 
-Use ./ to make it clear that the argument is a filename rather than a command-line option
+*http://natas3.natas.labs.overthewire.org/s3cr3t/users.txt*
 
-*For example:*
+Inside you'll find:
 
-cat ./--spaces\ in\ this\ filename--
+natas4:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-## Password
+**Step 6: Log in to Level 4**
 
-The command outputs the password required to log in to Bandit Level 3.
+Username: natas4
+Password: <password found above>
+URL: http://natas4.natas.labs.overthewire.org
 
-Note: I have intentionally not included the actual password here so that the write-up remains suitable for a public GitHub repository.
+*Lesson learned*
 
-*Takeaway*
-
-This level taught me that special characters in filenames can affect how Linux commands interpret their arguments. Using ./ or properly quoting/escaping the filename allows the file to be accessed safely.
-
+robots.txt is meant to tell search engines what not to index — but it's publicly readable by anyone, including attackers. Listing sensitive paths in it (instead of properly restricting access server-side) is "security through obscurity" and doesn't actually protect anything.
