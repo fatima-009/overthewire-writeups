@@ -1,67 +1,58 @@
-## OverTheWire Bandit: Level 3 → Level 4
+## Natas Level 4 → Level 5
 
-## Objective
-The goal of this level is to find the password for the next level. The password is stored in a hidden file in the inhere directory.
+*Goal: Find the password for natas5. This level checks the HTTP Referer header and only grants access if you appear to have come from an "internal" admin page.*
 
-## Steps
+**Step 1: Access the level**
 
-- First, I checked the files in the current directory:
+http://natas4.natas.labs.overthewire.org
 
-```bash
-ls
-```
-- The output showed a directory named:
+Username: natas4
+Password: (from level 3)
 
-inhere
+**Step 2: Read the page message**
 
-I moved into the inhere directory:
+The page tells you:
 
-```bash
-cd inhere
-```
-- Then, I used the ls command to check the files:
+Access disallowed. You are visiting from "" while you are required to visit from "http://natas5.natas.labs.overthewire.org/"
 
-```bash
-ls
-```
-Nothing was displayed because the password is stored in a hidden file.
+This means the server is checking the Referer HTTP header, and expects it to be http://natas5.natas.labs.overthewire.org/.
 
-- To display hidden files, I used the -a option with ls:
+**Step 3: Spoof the Referer header**
+
+- Option A — using curl
 
 ```bash
-ls -la
+curl -u natas4:<password_from_level4> \
+  -e "http://natas5.natas.labs.overthewire.org/" \
+  http://natas4.natas.labs.overthewire.org/ 
 ```
 
-This showed a hidden file named:
+(-e sets the Referer header in curl)
 
-.hidden
+- Option B — using a browser extension
 
-- I used the cat command to read the file:
+Use an extension like "ModHeader" (Chrome/Firefox) to set:
 
-```bash
-cat .hidden
-```
+Referer: http://natas5.natas.labs.overthewire.org/
 
-The command displayed the password for the next level.
+Then reload the natas4 page.
 
-## Key Concept
+- Option C — Burp Suite
 
-- This level demonstrates how to find and access hidden files in Linux.
+Intercept the request and modify the Referer header manually before forwarding.
 
-- The important command used in this level is:
+**Step 4: Get the password**
 
-```bash
-ls -la
-```
+Once the correct Referer is sent, the page will respond with:
 
-- The -a option tells ls to show all files, including hidden files.
+Access granted. The password for natas5 is XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-- Hidden files in Linux usually start with a ., such as:
+**Step 5: Log in to Level 5**
 
-.hidden
+Username: natas5
+Password: <password found above>
+URL: http://natas5.natas.labs.overthewire.org
 
-## Password
+*Lesson learned*
 
-- The command outputs the password required to log in to Bandit Level 4.
-
-- The actual password is intentionally not included in this public write-up.
+The Referer header is fully controlled by the client and can be trivially spoofed. It should never be used as a security or authentication mechanism — it's meant for analytics/navigation context, not access control.
