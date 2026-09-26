@@ -1,131 +1,68 @@
-# OverTheWire Bandit — Level 5 → Level 6
+# Natas Level 5 → 6
 
-**Objective**
+**Goal:** Find the password for natas7. This level exposes its PHP source code, revealing that a "secret" value is read from an included file — and that file path is guessable/accessible.
 
-*The goal of this level is to find the password for Bandit Level 6.*
+# Step 1: Access the level
 
-- The password is stored in a file inside the inhere directory. According to the challenge, the file:
+http://natas6.natas.labs.overthewire.org
 
-1. Is human-readable
-2. Is exactly 1033 bytes in size
-3. Is not executable
+Username: natas6
+Password: (from level 5)
 
+# Step 2: Read the page
 
-# Step 1 — Connect to Bandit Level 5
+The page shows a form asking you to input a "secret" value to gain access.
 
-Connect to the Bandit server using SSH:
+# Step 3: View the PHP source code
 
-```bash
-ssh bandit5@bandit.labs.overthewire.org -p 2220
+Natas conveniently provides a link on the page to view the source (labeled something like "View sourcecode"), or you can browse directly to:
+
+http://natas6.natas.labs.overthewire.org/index-source.html
+
+Inside, you'll see something like:
+
+```php
+<?
+include "includes/secret.inc";
+
+if(array_key_exists("submit", $_POST)) {
+    if($secret == $_POST['secret']) {
+        print "Access granted. The password for natas7 is <censored>";
+    } else {
+        print "Wrong secret";
+    }
+}
+?>
 ```
 
-After entering the Level 5 password, we are logged in as bandit5.
+This tells you the actual secret value is defined inside includes/secret.inc.
 
-# Step 2 — Check the Current Directory
+## Step 4: View the included file directly
 
-- First, check the current working directory:
+Since it's just a normal file path, browse to:
 
-```bash
-pwd
-```
-Output:
+http://natas6.natas.labs.overthewire.org/includes/secret.inc
 
-```bash
-/home/bandit5
-```
+You'll see something like:
 
-- List the contents:
-
-```bash
-ls
+```php
+<?
+$secret = "FOEIUWGHFEEUHOFUOIU";
+?>
 ```
 
-We can see a directory called:
+(the actual value will be some random string)
 
-```bash
-inhere
-```
+# Step 5: Submit the secret
 
-- Move into it:
+Go back to the main natas6 page, enter that secret value into the form, and submit it.
 
-```bash
-cd inhere
-``` 
+# Step 6: Get the password
 
-# Step 3 — Find the Correct File
+The page will respond with:
 
-There are multiple files and directories inside inhere, so instead of checking them manually, we can use the find command.
+Access granted. The password for natas7 is XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-Use:
+*Lesson learned*
 
-```bash
-find . -type f -size 1033c -not -executable -exec file {} + | grep ASCII
-```
-
-*Command Breakdown*
-
-`find .`
-
-Search recursively from the current directory.
-
-`-type f`
-
-Search only for regular files.
-
-`-size 1033c`
-
-Find files that are exactly 1033 bytes.
-
-The `c` represents bytes.
-
-`-not -executable`
-
-Exclude executable files.
-
-`-not -executable` and `! -executable` are equivalent in this case.
-
-`-exec file {} +`
-
-Run the `file` command on the matching files.
-
-The `file` command determines the type/content of a file.
-
-For example, it may return:
-
-```bash
-./maybehere07/.file2: ASCII text
-```
-
-The `{}` represents the files found by `find`.
-
-The `+` allows multiple matching files to be passed to file together.
-
-`| grep ASCII`
-
-The pipe `|` sends the output of `file` to `grep`.
-
-`grep ASCII` filters the output and displays only lines containing ASCII.
-
-This helps us identify the human-readable ASCII text file.
-
-
-# Step 4 — Read the Password
-
-The command should return the path of the matching file, for example:
-
-```bash
-./maybehere07/.file2: ASCII text
-```
-
-Now read the file using:
-
-```bash
-cat ./maybehere07/.file2
-```
-
-*The output is the password for Bandit Level 6.*
-
-
-# Conclusion
-
-In this level, we learned how to combine multiple Linux commands to efficiently locate a specific file. The combination of find, file, and grep allows us to narrow down the results and identify the required human-readable file.
+Including server-side logic files (like .inc files) inside the web root means anyone can request them directly and read their raw contents, since the server doesn't always know to treat .inc as executable PHP. Sensitive configuration or secret values should never live in web-accessible files — they belong outside the document root or in properly protected config storage.
