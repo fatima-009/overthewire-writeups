@@ -1,60 +1,108 @@
-# Natas Level 6 → 7
+# OverTheWire Bandit — Level 6 → Level 7
 
-**Goal:** Find the password for natas8. This level demonstrates a classic Local File Inclusion (LFI) vulnerability through a page URL parameter.
+**Objective**
 
-# Step 1: Access the level
+*The goal of this level is to find the password for Bandit Level 7.*
 
-http://natas7.natas.labs.overthewire.org
+- The password is stored somewhere on the server and has the following properties:
 
-Username: natas7
-Password: (from level 5)
+1. Owned by user bandit7
+2. Owned by group bandit6
+3. Exactly 33 bytes in size
 
-# Step 2: Observe the URL structure
 
-The page has navigation links like "Home" and "About", and the URL looks like:
+# Step 1 — Connect to Bandit Level 6
 
-http://natas7.natas.labs.overthewire.org/index.php?page=home
+Connect to the Bandit server using SSH:
 
-This tells you the server is including a file based on the page parameter likely something like:
-
-```php
-include($_GET['page'] . ".php");
-``` 
-
-# Step 3: View the source code (if available)
-
-This usually confirms the include logic, showing something like:
-
-```php
-<?
-    if( ! isset( $_GET['page'] ) || ! is_string( $_GET['page'] ) ) {
-        $page = "home";
-    } else {
-        $page = $_GET['page'];
-    }
-    ...
-    include($page . ".php");
-?>
+```bash
+ssh bandit6@bandit.labs.overthewire.org -p 2220
 ```
 
-Since there's no filtering on .. or absolute paths, this is exploitable.
+After entering the Level 6 password, we are logged in as bandit6.
 
-# Step 4: Exploit the LFI to read local files
+# Step 2 — Search the Entire Server
 
-Try reading the /etc/passwd file (a classic proof of LFI), or more specifically, try to read the natas8 password file directly. Passwords for natas levels are typically stored at:
+The challenge tells us that the file can be located anywhere on the server, so we need to search from the root directory /.
 
-/etc/natas_webpass/natas8
+We can use:
 
-Craft the URL:
+```bash
+find / -type f -user bandit7 -group bandit6 -size 33c 2>/dev/null
+```
 
-http://natas7.natas.labs.overthewire.org/index.php?page=/etc/natas_webpass/natas8
+*Command Breakdown*
 
-# Step 5: Get the password
+`find /`
 
-If successful, the password file's contents will be included directly into the page output:
+Starts searching from the root directory /, meaning the entire filesystem.
 
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+`-type f`
 
-*Lesson learned*
+Searches only for regular files.
 
-Passing user input directly into an include() (or similar file-loading function) without validation lets an attacker read arbitrary files on the server or even achieve remote code execution if they can control file content (e.g., via log poisoning or file upload). User input used in file paths must always be validated against a strict allow-list, never trusted directly.
+`-user bandit7`
+
+Finds files owned by the user bandit7.
+
+`-group bandit6`
+
+Finds files owned by the group bandit6.
+
+`-size 33c`
+
+Finds files that are exactly 33 bytes.
+
+The c represents bytes.
+
+`2>/dev/null`
+
+Some directories will return Permission denied errors because the bandit6 user does not have permission to access them.
+
+- This part:
+
+`2>/dev/null`
+
+redirects error messages to /dev/null, so the permission errors are hidden.
+
+
+# Step 3 — Find the Password File
+
+The command should return a path similar to:
+
+```bash
+/var/lib/dpkg/info/... 
+```
+
+The exact path may vary depending on the environment.
+
+- Once the matching file is found, use cat to read it:
+
+```bash
+cat <matching-file>
+```
+
+*The output will be the password for Bandit Level 7.*
+
+
+*What does 2> mean?*
+
+Linux uses different file descriptors:
+
+File Descriptor	Meaning
+- 0	 Standard input
+- 1	 Standard output
+- 2	 Standard error
+
+Therefore:
+
+2>/dev/null
+
+means:
+
+Redirect standard error to /dev/null.
+
+
+**Conclusion**
+
+This level introduces more advanced usage of the find command. Instead of searching only by filename, we can search based on ownership, group, and file size. We also learned how to redirect error messages using 2>/dev/null.
