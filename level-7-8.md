@@ -1,76 +1,83 @@
-# OverTheWire Bandit — Level 7 → Level 8
+# Natas Level 7 → Level 8
 
-**Objective**
+**Goal:**
 
-*The goal of this level is to find the password for Bandit Level 8.*
+Find the password for natas9. This level "encodes" a secret using a chain of reversible transformations, but since the code is visible, you can just reverse the logic manually.
 
-*The password is stored in a file called data.txt, next to the word millionth.*
+# Step 1: Access the level
 
+http://natas8.natas.labs.overthewire.org
 
-# Step 1 — Connect to Bandit Level 7
+Username: natas8
+Password: (from level 6)
 
-Connect to the Bandit server:
+# Step 2: Read the page
 
-```bash
-ssh bandit7@bandit.labs.overthewire.org -p 2220
+Like level 6, there's a form asking for a "secret" value.
+
+# Step 3: View the PHP source code
+
+In the source code you'll see something like:
+
+```php
+<?
+$encodedSecret = "3d3d516343746d4d6d6c315669563362";
+
+function encodeSecret($secret) {
+    return bin2hex(strrev(base64_encode($secret)));
+}
+
+if(array_key_exists("submit", $_POST)) {
+    if(encodeSecret($_POST['secret']) == $encodedSecret) {
+        print "Access granted. The password for natas9 is <censored>";
+    } else {
+        print "Wrong secret";
+    }
+}
+?>
 ```
 
-After entering the Level 7 password, we are logged in as bandit7.
+So the real secret goes through three transformations:
 
-# Step 2 — Check the Files
+- base64_encode($secret)
+- strrev(...) — reverse the string
+- bin2hex(...) — convert to hex
 
-List the contents of the current directory:
+To recover the original secret, you must reverse these steps in reverse order:
 
-```bash
-ls
-```
+- Convert hex → binary/string (hex2bin)
+- Reverse the string again (strrev)
+- Base64-decode it (base64_decode)
 
-We can see:
+# Step 4: Reverse it manually
 
-```bash
-data.txt
-```
-
-*The challenge tells us that the password is next to the word:*
-
-`millionth`
-
-# Step 3 — Search for the Word
-
-Instead of manually reading the entire file, we can use grep:
+Using PHP (via CLI):
 
 ```bash
-grep "millionth" data.txt
+php -r '$s = "3d3d516343746d4d6d6c315669563362"; echo base64_decode(strrev(hex2bin($s)));'
 ```
 
-The command searches data.txt for the word millionth.
+Using Python:
 
-The output will look similar to:
-
-```bash
-millionth    <Bandit Level 8 Password>
+```python
+import base64
+encoded = "3d3d516343746d4d6d6c315669563362"
+step1 = bytes.fromhex(encoded).decode()   # hex2bin
+step2 = step1[::-1]                       # strrev
+step3 = base64.b64decode(step2).decode()  # base64_decode
+print(step3)
 ```
 
-*The value after millionth is the password for Level 8.*
+(Note: use the actual $encodedSecret value shown on your instance, it's randomized per session.)
 
-*Command Breakdown*
+# Step 5: Submit the secret
 
-`grep`
+Take the decoded value from Step 4 and submit it in the form on the natas8 page.
 
-Is used to search for specific text inside files.
+# Step 6: Get the password
 
-`grep "millionth" data.txt`
+Access granted. The password for natas9 is XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
+*Lesson learned*
 
-- Here:
-
-grep → search command
-
-"millionth" → text we want to find
-
-data.txt → file we want to search
-
-
-**Conclusion**
-
-This level demonstrates how grep can quickly locate specific information inside a file without manually reading the entire file.
+Obfuscation (encoding, reversing, hex conversion) is not encryption — it provides no real security since anyone with access to the algorithm (which was visible in the source) can trivially reverse it. Never rely on "secret" transformation logic to protect sensitive values; use proper cryptographic hashing/salting for anything meant to stay hidden.
