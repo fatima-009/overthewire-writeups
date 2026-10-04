@@ -1,119 +1,79 @@
-# OverTheWire Bandit: Level 12 → Level 13
+# Natas Level 12 → Level 13 
 
-## Challenge Description
+**Goal:** Find the password for natas14. The server only accepts files that pass `exif_imagetype()`, but this function is vulnerable because it only checks the `first few bytes (magic bytes)` of a file to decide whether it's a valid image, it doesn't validate the rest of the content. This lets us prepend valid JPEG magic bytes to a PHP payload and bypass the check.
 
-> The password for the next level is stored in the file `data.txt`, which is a
-> hexdump of a file that has been repeatedly compressed. For this level it may
-> be useful to create a directory under `/tmp` in which you can work.
+### Step 1: Set up Burp Suite
 
-**Goal:** Reverse the hexdump and decompress the file layer by layer until the
-plain-text password appears.
+- Open Burp Suite → Proxy tab → make sure Intercept is ON.
+- Route your browser through Burp's proxy, or use Burp's built-in browser.
 
-**Connection:**
+### Step 2: Log in to the level
 
-    ssh bandit12@bandit.labs.overthewire.org -p 2220
+In the Burp browser:
 
-## Concepts Involved
+http://natas13.natas.labs.overthewire.org
+Username: natas13
+Password: (from previous level)
 
-- **Hexdump reversal (`xxd -r`)**: converts a hex dump back into the original binary file.
+### Step 3: Find the JPEG magic bytes
 
-- **`file` command**: detects the real file type from its content, not its extension.
+A quick search shows that JPEG files start with the magic bytes `FF D8 FF E0`. Create a file containing just these bytes:
 
-- **Compression formats**: gzip (`gunzip`), bzip2 (`bunzip2`) and tar (`tar -xf`).
+"printf '\xff\xd8\xff\xe0' > natas13_magic` "
 
-## Solution
+### Step 4: Write the malicious PHP payload
 
-### Step 1: Look at the file
+Create a second file, `natas13.php`, with PHP code that reads the next level's password file:
+
+"
+<?php
+$file = file_get_contents('/etc/natas_webpass/natas14');
+echo "\n" . $file;
+?>
+"
+
+### Step 5: Concatenate both files
+
+Combine the magic bytes and the PHP code into a single file:
+
 ```bash
-
-    bandit12@bandit:~$ ls
-    data.txt
-    bandit12@bandit:~$ head data.txt
+cat natas13_magic natas13.php > natas13_2.php
 ```
 
-The file contains a hexdump (offsets followed by hex bytes), which confirms the
-hint from the challenge.
+The resulting file now starts with valid JPEG magic bytes (so it passes `exif_imagetype()`) while still containing executable PHP code.
 
-### Step 2: Create a working directory and copy the file
+### Step 6: Start Burp Suite and enable Intercept
 
-The home directory is read-only, so we work in `/tmp`.
+Open Burp Suite, go to the Proxy tab, and turn Intercept ON. Connect your browser to Burp's proxy.
 
-```bash
+### Step 7: Upload the malicious file
 
-    bandit12@bandit:~$ mkdir /tmp/random_dir
-    bandit12@bandit:~$ cd /tmp/random_dir
-    bandit12@bandit:/tmp/random_dir$ cp ~/data.txt .
-    bandit12@bandit:/tmp/random_dir$ mv data.txt data
-    bandit12@bandit:/tmp/random_dir$ ls
-    data
-```
-> Tip: on a shared server, choose a hard-to-guess directory name, or use
-> `cd $(mktemp -d)`, which creates and enters a unique directory.
+On the natas13 page, browse to natas13_2.php and click Upload File. Burp will pause the request.
 
-### Step 3: Reverse the hexdump
-```bash 
+### Step 8: Inspect the Burp response/request
 
-    bandit12@bandit:/tmp/random_dir$ xxd -r data > binary
-    bandit12@bandit:/tmp/random_dir$ file binary
-    binary: gzip compressed data, was "data2.bin", ...
-``` 
-### Step 4: Decompress layer by layer
+A new filename will have been auto-generated with a `.jpg` extension (from the hidden filename field in the form).
 
-At each layer: run `file`, then use the matching tool.
+### Step 9: Edit the extension and forward
 
-**Layer 1: gzip**
-```bash
+In Burp, change the filename's extension from `.jpg to .php`, then click Forward to send the request through (forward any remaining intercepted steps until the process completes).
 
-    bandit12@bandit:/tmp/random_dir$ mv binary binary.gz
-    bandit12@bandit:/tmp/random_dir$ gunzip binary.gz
-    bandit12@bandit:/tmp/random_dir$ file binary
+### Step 10: Confirm the upload
 
-    binary: bzip2 compressed data, block size = 900k
-``` 
+The response confirms the file was uploaded successfully, with a link like:
 
-**Layer 2: bzip2**
-```bash
+The file <a href="upload/xxxxxxxxxx.php">upload/xxxxxxxxxx.php</a> has been uploaded
 
-    bandit12@bandit:/tmp/random_dir$ bunzip2 binary
+### Step 11: Open the uploaded file
 
-    bunzip2: Can't guess original name for binary -- using binary.out
-    bandit12@bandit:/tmp/random_dir$ file binary.out
-    binary.out: gzip compressed data, was "data4.bin", ...
-```
-`bunzip2` expects a `.bz2` extension. Without it, it still works but writes the
-result to `binary.out`. Renaming the file to `binary.bz2` first avoids the warning.
+Click the uploaded file's link (or visit it directly in the browser). Since the PHP code runs `file_get_contents()` on the password file, the password is printed immediately, no extra `?cmd= parameter` needed.
 
-**Layer 3: gzip again**
+### Step 12: Get the password
 
-```bash
-    bandit12@bandit:/tmp/random_dir$ mv binary.out binary.gz
-    bandit12@bandit:/tmp/random_dir$ gunzip binary.gz
-    bandit12@bandit:/tmp/random_dir$ file binary
-    binary: POSIX tar archive (GNU)
- ``` 
+The response body will contain:
 
-**Layer 4: tar**
-```bash
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
-    bandit12@bandit:/tmp/random_dir$ tar -xf binary
-    bandit12@bandit:/tmp/random_dir$ ls
-    <extracted file> binary data
-```
-### Step 5: Read the password
+*Lesson learned*
 
-Once `file` reports ASCII text:
-```bash
-
-    bandit12@bandit:/tmp/random_dir$ file <final file>
-    <final file>: ASCII text
-    bandit12@bandit:/tmp/random_dir$ cat <final file>
-    The password is <natas_13_password>
-```
-
-## Key Takeaways
-
-- Never trust file extensions. Use `file` to identify the real format at every step.
-- The workflow is a loop: **identify → rename → decompress**.
-- `gunzip` needs a `.gz` extension and `bunzip2` needs `.bz2`, otherwise they
-  complain or create `.out` files.
-- Delete intermediate files you no longer need to keep the directory readable.
+`exif_imagetype()` (and similar functions like `getimagesize()`) only validate a file's header/magic bytes, not its entire content. By prepending valid image magic bytes to a malicious payload, an attacker can pass this check while the rest of the file still executes as PHP once given an executable extension. Proper image upload validation should re-encode/re-process the image server-side (which strips non-image data), and uploaded files should be stored outside the web root or in a location where script execution is disabled.
