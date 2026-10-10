@@ -41,7 +41,7 @@ would be slow and error-prone.
     42c42
     < <old line>
     ---
-    > <Natas18_password>
+    > <bandit18_password>
 
 How to read this output:
 
@@ -54,7 +54,7 @@ The task says the password is in `passwords.new`, so it is the line starting wit
 ### Alternative: Print only the new line
 
     bandit17@bandit:~$ diff passwords.old passwords.new | grep '^>'
-    > <Natas18_password>
+    > <bandit18_password>
 
 Remove the leading `> ` (the `>` and one space) and what remains is the password.
 
