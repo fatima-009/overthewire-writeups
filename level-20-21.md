@@ -1,101 +1,132 @@
-# OverTheWire Bandit: Level 20 → Level 21
+# Natas Level 20 - 21 
 
-## Challenge Description
+**Challenge:** [OverTheWire: Natas — Level 21](http://natas21.natas.labs.overthewire.org)
+**Category:** Web Exploitation / Session Management
+**Tools used:** Burp Suite (Community Edition), Browser DevTools
 
-> There is a **setuid binary** in the homedirectory that does the following: it
-> makes a connection to localhost on the port you specify as a commandline
-> argument. It then reads a line of text from the connection and compares it to
-> the password in the previous level (bandit20). If the password is correct, it
-> will transmit the password for the next level (bandit21).
 
-> NOTE: Try connecting to your own network daemon to see if it works as you think.
+## 1. Challenge Overview
 
-**Goal:** Start your own network listener that sends the current password,
-then make the setuid binary connect to it so it replies with the next password.
+Natas Level 21 introduces a second, **colocated** website:
+`natas21-experimenter.natas.labs.overthewire.org`.
 
-**Connection:**
+The banner on both pages explicitly states:
 
-    ssh bandit20@bandit.labs.overthewire.org -p 2220
+> *"Note: this website is colocated with `http://natas21.natas.labs.overthewire.org`"*
 
-## Concepts Involved
+The experimenter site is a harmless-looking form that lets you customize a demo box (`align`, `fontsize`, `bgcolor`) and displays a debug dump of the current PHP `$_SESSION` array. The real `natas21` page, on the other hand, only shows the password **if `$_SESSION['admin'] == 1`** and gives you no way to set that value directly.
 
-- **Setuid binary**: runs with the privileges of its owner (`bandit21`), so it
-  is allowed to read the next level's password.
+The vulnerability lies in how PHP sessions are stored and shared between the two "colocated" applications.
 
-- **Client / server roles**: the binary (`suconnect`) acts as a **client**, so
-  we must provide the **server** it connects to.
 
-- **`nc -l` (netcat in listen mode)**: opens a port and waits for a connection.
+## 2. Recon
 
-- **Background jobs (`&`)**: let us run the listener and the binary in the same
-  terminal session.
+Loading `natas21-experimenter/index.php?debug` shows the live session contents after every request:
 
-- **Pipes (`|`)**: send the password file's content into the listener.
-
-## Solution
-
-### Step 1: Look at the binary
-```bash
-    bandit20@bandit:~$ ls -l
-    -rwsr-x--- 1 bandit21 bandit20 <size> <date> suconnect
-
-    bandit20@bandit:~$ ./suconnect
-    Usage: ./suconnect <portnumber>
+```
+Array
+(
+    [align]    => center
+    [fontsize] => 100%
+    [bgcolor]  => yellow
+    [admin]    => 0
+    [submit]   => Update
+)
 ```
 
-    This program will connect to the given port on localhost using TCP. If it
-    receives the correct password from the other side, this program will then
-    transmit the password for the next level back to the other side.
+Reviewing the experimenter's logic (paraphrased from behavior), it works roughly like this:
 
-The `s` in the permissions confirms the setuid bit. The binary connects to the
-port we give it and compares what it receives with the bandit20 password.
+```php
+session_start();
 
-### Step 2: Start a listener that sends the current password
+if (array_key_exists("align", $_REQUEST))    { $_SESSION["align"]    = $_REQUEST["align"]; }
+if (array_key_exists("fontsize", $_REQUEST)) { $_SESSION["fontsize"] = $_REQUEST["fontsize"]; }
+if (array_key_exists("bgcolor", $_REQUEST))  { $_SESSION["bgcolor"]  = $_REQUEST["bgcolor"]; }
 
-Run `nc` in listen mode on a free port above 1024 (here `4444`) and put it in
-the background with `&`. The password is piped in, so it will be sent to
-whoever connects:
-```bash
-
-    bandit20@bandit:~$ cat /etc/bandit_pass/bandit20 | nc -l -p 4444 &
-    [1] <pid>
+$_SESSION["admin"] = 0;
+if (array_key_exists("admin", $_REQUEST)) {
+    $_SESSION["admin"] = $_REQUEST["admin"];
+}
 ```
 
-### Step 3: Run the setuid binary against our listener
-```bash
+Key insight: `admin` is **first reset to 0**, but then **overwritten by whatever you send in the request** if the `admin` parameter is present. So by simply adding `admin=1` to the POST body, the experimenter app will happily store `admin => 1` in its own session.
 
-    bandit20@bandit:~$ ./suconnect 4444
-    Read: <bandit20 password>
-    Password matches, sending next password
+The real `natas21` page never lets you set `admin` at all, it only *reads* it. So the goal is to get a session where `admin == 1` recognized by `natas21`, without ever being able to set it there directly.
+
+**The bridge:** both applications are colocated on the same server and share the same PHP session storage backend (session files on disk, keyed by `PHPSESSID`). The only thing separating them in the browser is that each site's cookie is scoped to a different hostname. If you can get the *same* `PHPSESSID` value recognized by both hosts, they will read/write the **same underlying session file**.
+
+
+## 3. Exploitation Steps (Burp Suite)
+
+### Step 1 — Capture the experimenter request
+Browse to `natas21-experimenter`, submit the form once with Burp's Proxy intercepting, and send that request to **Repeater**.
+
+### Step 2 — Force `admin=1`
+In the Repeater request, edit the POST body to include the extra parameter:
+
+```
+align=center&fontsize=100%25&bgcolor=yellow&admin=1&submit=Update
 ```
 
-The binary connected to our listener, read the password we sent, found it
-correct, and sent back the password for `bandit21`.
+### Step 3 — Send and confirm
+Send the request. The rendered response (with `?debug` in the URL) confirms:
 
-### Step 4: Read the reply
+```
+[admin] => 1
+```
 
-Our listener receives the data from `suconnect` and prints it to the terminal:
+Note the `PHPSESSID` cookie value used for this request — for example:
 
-    <bandit21 password>
+```
+PHPSESSID=9m92oa9a0****************
+```
 
-### Alternative: Use two terminals
+This is now the ID of a session file, sitting on the shared server, that contains `admin => 1`.
 
-Instead of a background job, open two SSH sessions as `bandit20`:
+### Step 4 — Capture a request to the real natas21 site
+In a second Repeater tab, load a request to:
 
-    # Terminal 1: start the listener and send the current password
-    bandit20@bandit:~$ cat /etc/bandit_pass/bandit20 | nc -l -p 4444
+```
+http://natas21.natas.labs.overthewire.org/
+```
 
-    # Terminal 2: run the setuid binary
-    bandit20@bandit:~$ ./suconnect 4444
+### Step 5 — Swap the session cookie
+Replace that request's `Cookie` header value with the **exact** `PHPSESSID` captured from the experimenter site in Step 3:
 
-The next password appears in **Terminal 1**.
+```
+Cookie: PHPSESSID=9m92oa9a0****************
+```
 
-## Troubleshooting
+### Step 6 — Send
+Because `natas21` only *checks* `$_SESSION['admin']` and never resets it, and because it's reading the very same session file on disk, the page now renders the admin content — including the password for the next level.
 
-               Problem                 |                                        Cause / Fix 
 
-| `nc: Address already in use`         | Another user or process is using that port. Pick a different one (for example `4567`, `31337`). |
-| `Could not connect` from `suconnect` | The listener is not running yet, or the port numbers do not match. Start `nc` first.            |
-| `Password does not match`            | The listener sent the wrong data. Make sure you pipe `/etc/bandit_pass/bandit20`.               |
-| No output appears                    | The listener's output may be hidden. Press Enter, or use the two-terminal method.               |
-| Background job still running         | Check with `jobs` and close with `kill %1`.                                                     |
+## 4. Root Cause
+
+- Two applications on the same host were designed to **share a session storage backend** while relying on the **hostname-scoped cookie** as their only isolation boundary.
+- Session identifiers were treated as authorization tokens without validating *which application* actually issued or is entitled to trust them.
+- One app allowed a client-controlled value (`admin`) to be written directly into session state with no server-side authorization check.
+
+This is a practical demonstration of **session fixation / session sharing across trust boundaries** — a real-world risk whenever multiple applications (e.g., microservices, staging vs. prod, subdomains) share a session store without properly namespacing or re-validating session data per application.
+
+
+## 5. Mitigation
+
+- Never share a session storage backend across applications with different trust levels.
+- If shared storage is unavoidable, namespace session keys per application (e.g., `app_a:admin` vs `app_b:admin`).
+- Never let a client set privileged flags (like `admin`) directly via request parameters — derive them from authenticated, server-side state only.
+- Regenerate/rotate session IDs on privilege changes (`session_regenerate_id()`), and bind sessions to additional context (IP, user-agent) where appropriate.
+
+
+## 6. Result
+
+Password for `natas22` was retrieved by reading the rendered response after Step 6.
+
+*(Redacted here — replace with your own credential before publishing if you choose to include it.)*
+
+
+## 7. Lessons Learned
+
+- Session management bugs are often invisible from a single application's code, they emerge from **how systems are wired together**.
+- Burp Suite's Repeater is ideal for this kind of exploit: it lets you hold two independent, editable requests side by side and control exactly when each is sent.
+- Always ask: *"What does this application trust, and where does that trust actually come from?"*
