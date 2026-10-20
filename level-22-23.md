@@ -1,95 +1,82 @@
-# OverTheWire Bandit: Level 22 → Level 23
+# Natas Level 23 — Writeup
 
-## Challenge Description
+**Challenge:** [OverTheWire: Natas — Level 23](http://natas23.natas.labs.overthewire.org)
+**Category:** Web Exploitation / PHP Type Juggling & Loose Comparison
+**Tools used:** Just a browser — no Burp Suite or interception needed for this level
 
-> A program is running automatically at regular intervals from **cron**, the
-> time-based job scheduler. Look in `/etc/cron.d/` for the configuration and
-> see what command is being executed.
 
-> NOTE: Looking at shell scripts written by other people is a very useful skill.
-> The script for this level is intentionally made easy to read. If you are
-> having problems understanding what it does, try executing it to see the debug
-> information it provides.
+## 1. Challenge Overview
 
-**Goal:** Understand how the cron script builds its output file name, then work
-out the file name used for `bandit23` and read it.
+Natas Level 23 exposes its own PHP source directly on the page:
 
-**Connection:**
-
-    ssh bandit22@bandit.labs.overthewire.org -p 2220
-
-## Concepts Involved
-
-- **Cron jobs**: scheduled tasks that run automatically as a specific user.
-- **`whoami`**: prints the name of the current user. Inside the cron job it
-  returns the user the job runs as.
-- **`md5sum`**: computes an MD5 hash of its input. The same input always gives the same hash.
-- **`cut`**: extracts selected parts of each line (here, the hash without the trailing `-`).
-- **Command substitution `$(...)`**: runs a command and inserts its output into another command.
-
-## Solution
-
-### Step 1: Find the cron job
-```bash
-
-    bandit22@bandit:~$ cat /etc/cron.d/cronjob_bandit23
-    @reboot bandit23 /usr/bin/cronjob_bandit23.sh &> /dev/null
-    * * * * * bandit23 /usr/bin/cronjob_bandit23.sh &> /dev/null
+```php
+<?php
+    if(array_key_exists("passwd",$_REQUEST)){
+        if(strstr($_REQUEST["passwd"],"iloveyou") && ($_REQUEST["passwd"] > 10 )){
+            echo "<br>The credentials for the next level are:<br>";
+            echo "<pre>Username: natas24 Password: <censored></pre>";
+        }
+        else{
+            echo "<br>Wrong!<br>";
+        }
+    }
+    // morla / 10111
+?>
 ```
 
-The script runs **every minute as `bandit23`**.
+Unlike the earlier levels, this one doesn't require intercepting or modifying traffic at all. The entire challenge can be solved by typing the right value into the URL bar. The interesting part is entirely in *understanding the PHP*, not in manipulating the HTTP request.
 
-### Step 2: Read the script
-```bash
+Two conditions must both evaluate to `true`:
 
-    bandit22@bandit:~$ cat /usr/bin/cronjob_bandit23.sh
-    #!/bin/bash
+1. `strstr($_REQUEST["passwd"], "iloveyou")` — the input must **contain** the substring `"iloveyou"` somewhere in it.
+2. `$_REQUEST["passwd"] > 10` — the input, compared as if it were a number, must come out greater than 10.
 
-    myname=$(whoami)
-    mytarget=$(echo I am user $myname | md5sum | cut -d ' ' -f 1)
+At first glance these look mutually exclusive how can a value be "a number greater than 10" and also "a string containing a word"? PHP's type juggling makes both possible at once.
 
-    echo "Copying passwordfile /etc/bandit_pass/$myname to /tmp/$mytarget"
 
-    cat /etc/bandit_pass/$myname > /tmp/$mytarget
+## 2. Understanding the Conditions
+
+### a) `strstr()` is a substring search, not an equality check
+`strstr($haystack, $needle)` returns the **portion of the string starting from the first occurrence** of `$needle`  or `false` if it isn't found. Any string that has `"iloveyou"` in it anywhere returns a non-empty (truthy) result, whether that substring is at the start, middle, or end of the input.
+
+### b) Comparing a string to an integer triggers type juggling
+The second condition compares a **string** to the **integer** `10` using `>`. In PHP, when you compare a string to a number this way, PHP converts the string's **leading numeric characters** into a number for the comparison and ignores the rest. So a value like:
+
+```
+100iloveyou
 ```
 
-What the script does, line by line:
+gets read as numerically `100` for the purpose of `> 10`, while the string still literally contains `"iloveyou"` for `strstr()` to find.
 
-- `myname=$(whoami)` : Stores the current username. When cron runs the job, this is `bandit23`. 
+If you're unsure how a PHP function or comparison behaves, the reliable way to check is to test it directly — either in a local PHP shell (`php -a`) or an online PHP sandbox rather than assuming based on intuition. Testing this pair of conditions directly shows that any string starting with a number above 10, followed by any other characters, satisfies the numeric check; and any string containing `"iloveyou"` anywhere satisfies the `strstr()` check.
 
-- `mytarget=$(echo I am user $myname \| md5sum \| cut -d ' ' -f 1)` : Builds the text `I am user bandit23`, hashes it with MD5, and keeps only 
-                                                                      the hash.
 
-- `cat /etc/bandit_pass/$myname > /tmp/$mytarget` : Copies the password file for that user into `/tmp/<hash>`. 
+## 3. Solution
 
-If we run the script ourselves as `bandit22`, `whoami` returns `bandit22`, so
-we would get bandit22's file name instead. We need the name used when
-`myname` is `bandit23`.
+Since the password needs to:
+1. Start with a number greater than 10, and
+2. Contain the substring `"iloveyou"` somewhere in it,
 
-### Step 3: Calculate the file name for bandit23
+a value like:
 
-Reproduce the same command, replacing the username manually:
-```bash
-
-    bandit22@bandit:~$ echo I am user bandit23 | md5sum | cut -d ' ' -f 1
-    <hash>
+```
+passwd=100iloveyou
 ```
 
-Because MD5 is deterministic, this is exactly the file name the cron job uses
-when it runs as `bandit23`.
+satisfies both conditions in a single string.
 
-### Step 4: Read the file
-```bash
+### Steps
+1. Log into `natas23` using the credentials carried over from Level 22.
+2. In the browser's address bar, append the query parameter directly:
 
-    bandit22@bandit:~$ cat /tmp/<hash>
-    <bandit23-password>
-```
+   ```
+   http://natas23.natas.labs.overthewire.org/?passwd=100iloveyou
+   ```
 
-## Key Takeaways
+3. Load the page. The response now shows:
 
-- Reading and understanding other people's shell scripts is an essential skill.
-- Deterministic functions like `md5sum` can be reproduced: the same input
-  always gives the same file name, so the "hidden" name is not secret.
-- Security through obscurity (an unpredictable-looking file name) is not
-  real protection, especially when the file is world-readable.
-- Run scripts with substituted values to test your understanding of their logic.
+   ```
+   The credentials for the next level are:
+   Username: natas24
+   Password: <Natas24-password>
+   ```
