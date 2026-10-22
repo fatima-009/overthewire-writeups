@@ -1,104 +1,39 @@
-# OverTheWire Bandit: Level 24 → Level 25
+# Natas 24 - 25 — OverTheWire Wargame Writeup
 
-## Challenge Description
+## Challenge
+Natas25 has a `lang` parameter that filters out `../` to prevent path traversal, but the filter isn't recursive — so `....//` becomes `../` once the inner pattern is stripped, allowing traversal outside the intended directory.
 
-> A daemon is listening on port 30002 and will give you the password for `bandit25` if given the password for the current level (`bandit24`) and a secret numeric 4-digit pin code. There is no way to retrieve the pin code apart from brute-forcing it.
+## Vulnerability
+The application logs each request (including the `User-Agent` header) to a file named:
+```
+/var/www/natas/natas25/logs/natas25_<PHPSESSID>.log
+```
+The `lang` parameter is later used in an `include()` call. Combining path traversal with this behavior means we can:
+1. Make the server write attacker-controlled data (our `User-Agent`) into a log file.
+2. Use the same `lang` parameter to traverse to and `include()` that log file, causing any PHP code inside it to execute — classic **log poisoning + Local File Inclusion (LFI)**.
 
-**Goal:** Send the current password together with every possible 4-digit PIN
-(0000–9999) to the service, and pick out the correct response.
+## Exploitation Steps
 
-**Connection:**
-
-    ssh bandit24@bandit.labs.overthewire.org -p 2220
-
-## Concepts Involved
-
-- **Brute-forcing**: trying every possible value in a small search space (here,
-  10,000 combinations of a 4-digit PIN) since there is no other way to find it.
-
-- **`nc` (netcat)**: used to send data to the TCP service.
-
-- **Bash loops and `seq`/`printf`**: generate all 4-digit numbers, including
-  leading zeros (`0000`, `0001`, ... `9999`).
-
-- **Filtering output with `grep`**: separate the one correct response from
-  thousands of "Wrong!" replies.
-
-## Solution
-
-### Step 1: Understand the service
-```bash
-
-    bandit24@bandit:~$ nc localhost 30002
-    I am waiting for a 4-digit pincode, along with the password.
-    Please enter <password> <pincode> separated by a space.
+**1. Identify the log file path** using your session cookie:
+```
+http://natas25.natas.labs.overthewire.org/?lang=....//....//....//....//....//var/www/natas/natas25/logs/natas25_<PHPSESSID>.log
 ```
 
-Each connection accepts exactly **one** attempt (one line), then closes. This
-means we cannot try all 10,000 PINs in a single connection; we must open a new
-connection for each guess.
+**2. Intercept the request with Burp Suite** and send it to Repeater.
 
-### Step 2: Prepare a working directory
-```bash
-
-    bandit24@bandit:~$ cd $(mktemp -d)
+**3. Modify the `User-Agent` header** to inject PHP code:
+```
+User-Agent: <?php echo shell_exec("cat /etc/natas_webpass/natas26"); ?>
 ```
 
-### Step 3: Generate all possible PINs and try each one
-
-Since each connection only accepts one guess, we loop and open a new
-connection per PIN, saving every reply to a file:
-```bash
-
-    bandit24@bandit:/tmp/tmp.XXXXXXXXXX$ pass=$(cat /etc/bandit_pass/bandit24)
-    bandit24@bandit:/tmp/tmp.XXXXXXXXXX$ for i in $(seq -w 0 9999); do
-        echo "$pass $i" | nc -w 1 localhost 30002 >> results.txt
-    done
-```
-
-**How it works:**
-
-| Part | Meaning |
-
-| `pass=$(cat /etc/bandit_pass/bandit24)` | Stores the current password in a variable |
-| `seq -w 0 9999` | Generates `0000` to `9999` with `-w` keeping the leading zeros |
-| `echo "$pass $i"` | Builds the line `<password> <pin>` the service expects |
-| `nc -w 1 localhost 30002` | Connects, waits at most 1 second for a reply, then closes |
-| `>> results.txt` | Appends every response to the same file |
-
-This loop takes a while (10,000 connections), so let it finish before moving on.
-
-### Step 4: Find the correct response
-
-Almost every line in `results.txt` will contain the "wrong" message. Filter
-those out:
-```bash
-
-    bandit24@bandit:/tmp/tmp.XXXXXXXXXX$ grep -v "Wrong" results.txt
-    Correct!
-    <bandit25-Password>
-```
-
-### Alternative: Filter while generating
-```bash
-
-    bandit24@bandit:/tmp/tmp.XXXXXXXXXX$ for i in $(seq -w 0 9999); do
-        echo "$pass $i" | nc -w 1 localhost 30002
-    done | grep -v "Wrong"
-```
-
-This streams the output directly through `grep`, without creating a results file.
+**4. Send the request twice.**
+- The first request writes the payload into the log file (it may not execute correctly right away, since PHP includes the file as it's still being written).
+- The second identical request writes a new log entry *and* includes the file again, this time the previously-saved PHP code is fully written to disk and executes cleanly via `include()`.
 
 ## Result
-
-    Password for bandit25: <**********>
+The response reveals the contents of `/etc/natas_webpass/natas26`, giving the password for the next level.
 
 ## Key Takeaways
-
-- A 4-digit PIN is only 10,000 possibilities, which is small enough to brute-force
-  quickly with a simple loop.
-- `seq -w` is useful for generating zero-padded number sequences.
-- When a protocol only allows one attempt per connection, the brute-force loop
-  must re-open the connection for every guess.
-- Redirecting all attempts to a file and filtering afterward is often easier
-  than trying to catch the right answer "live".
+- Naive blacklist filters (like stripping `../`) can be bypassed with patterns such as `....//`.
+- Never trust or reflect user-controlled input (like `User-Agent`) into files that are later executed or included.
+- Log poisoning is a powerful technique when LFI and attacker-controlled logging intersect.
