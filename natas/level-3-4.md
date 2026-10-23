@@ -1,4 +1,4 @@
-## Natas Level 4 → Level 5
+## Natas Level 3 → Level 4
 
 *Goal: Find the password for natas5. This level checks the HTTP Referer header and only grants access if you appear to have come from an "internal" admin page.*
 
