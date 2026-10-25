@@ -1,6 +1,6 @@
 ## Natas Level 4 → Level 5
 
-*Goal: Find the password for natas6. This level checks a cookie value to decide if you're "logged in" — and cookies, like headers, are fully client-controlled.*
+*Goal: Find the password for natas6. This level checks a cookie value to decide if you're "logged in" and cookies, like headers, are fully client-controlled.*
 
 **Step 1: Access the level**
 
