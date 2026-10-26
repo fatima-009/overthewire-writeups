@@ -1,4 +1,4 @@
-# Natas Level 11 → Level 12
+# Natas Level 10 → Level 11
 
 **Goal:** Find the password for natas12. This level stores user preferences (like background color) in an `XOR-"encrypted" cookie` and since you know the default plaintext, you can recover the XOR key and forge your own cookie.
 
@@ -7,7 +7,7 @@
 http://natas11.natas.labs.overthewire.org
 
 Username: natas11
-Password: (from level 10)
+Password: (from previous level)
 
 ### Step 2: Read the page
 
