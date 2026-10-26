@@ -2,7 +2,7 @@
 
 **Goal:**
 
-Find the password for natas11. This is the same dictionary-search app as Level 9, but this time it filters out shell metacharacters — so you need to find a way around the filter.
+Find the password for natas11. This is the same dictionary-search app as Level 9, but this time it filters out shell metacharacters so you need to find a way around the filter.
 
 # Step 1: Access the level
 
@@ -13,7 +13,7 @@ Password: (from previous level )
 
 # Step 2: Read the page
 
-Same as before — a form to search a "dictionary" word.
+Same as before a form to search a "dictionary" word.
 
 # Step 3: View the PHP source code
 
