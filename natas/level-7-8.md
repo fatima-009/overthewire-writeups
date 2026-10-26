@@ -9,7 +9,7 @@ Find the password for natas9. This level "encodes" a secret using a chain of rev
 http://natas8.natas.labs.overthewire.org
 
 Username: natas8
-Password: (from level 6)
+Password: (from previous level)
 
 # Step 2: Read the page
 
@@ -40,8 +40,8 @@ if(array_key_exists("submit", $_POST)) {
 So the real secret goes through three transformations:
 
 - base64_encode($secret)
-- strrev(...) — reverse the string
-- bin2hex(...) — convert to hex
+- strrev(...): reverse the string
+- bin2hex(...): convert to hex
 
 To recover the original secret, you must reverse these steps in reverse order:
 
@@ -80,4 +80,4 @@ Access granted. The password for natas9 is XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 *Lesson learned*
 
-Obfuscation (encoding, reversing, hex conversion) is not encryption — it provides no real security since anyone with access to the algorithm (which was visible in the source) can trivially reverse it. Never rely on "secret" transformation logic to protect sensitive values; use proper cryptographic hashing/salting for anything meant to stay hidden.
+Obfuscation (encoding, reversing, hex conversion) is not encryption it provides no real security since anyone with access to the algorithm (which was visible in the source) can trivially reverse it. Never rely on "secret" transformation logic to protect sensitive values; use proper cryptographic hashing/salting for anything meant to stay hidden.
