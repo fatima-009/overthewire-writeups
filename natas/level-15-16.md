@@ -1,6 +1,6 @@
 # Natas15 → Natas16 Writeup (OverTheWire)
 
-**Challenge:** [OverTheWire Natas Wargame](http://overthewire.org/wargames/natas/) — Level 16
+**Challenge:** [OverTheWire Natas Wargame](http://overthewire.org/wargames/natas/) Level 16
 **Category:** Web Exploitation / Blind Command Injection
 **Difficulty:** Medium
 
@@ -58,7 +58,7 @@ grep -i "$key" dictionary.txt
 
 ### The blind oracle trick
 
-We can't see command output directly — only whether `grep` matches something in `dictionary.txt`. So we build a **boolean oracle** out of that behavior:
+We can't see command output directly only whether `grep` matches something in `dictionary.txt`. So we build a **boolean oracle** out of that behavior:
 
 ```
 needle = $(grep ^p /etc/natas_webpass/natas17)
@@ -78,7 +78,7 @@ Two possible outcomes:
 So:
 
 | Response size | Meaning |
-|---|---|
+
 | Small/empty | Prefix guess is **correct** |
 | Large (full dictionary) | Prefix guess is **wrong** |
 
@@ -133,7 +133,7 @@ print("Password:", found)
 
 ## ✅ Result
 
-Running the script recovers the 32-character password for `natas17` character by character, purely from response-size differences — a classic **blind, boolean-based command injection**.
+Running the script recovers the 32-character password for `natas17` character by character, purely from response-size differences a classic **blind, boolean-based command injection**.
 
 ---
 
