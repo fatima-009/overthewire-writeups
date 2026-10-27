@@ -1,4 +1,4 @@
-# Natas Level 17 — Writeup
+# Natas Level 17 Writeup
 
 **Challenge:** [OverTheWire Natas Wargame](http://natas.labs.overthewire.org/)
 **Level:** natas16 → natas17
@@ -44,9 +44,9 @@ We brute-force this character by character, across the character set `[a-zA-Z0-9
 
 A naive implementation runs into false positives/negatives because:
 
-1. **Network/server jitter** — the shared Natas server has variable latency, so a "fast" request can occasionally take longer than expected, and get misread as a match.
-2. **No confirmation step** — a single slow response isn't reliable proof; it needs to be repeated.
-3. **Missing `break`** — after finding a matching character, the loop must stop trying the rest of the charset for that position, or it may overwrite a correct guess with a bad one.
+1. **Network/server jitter**: the shared Natas server has variable latency, so a "fast" request can occasionally take longer than expected, and get misread as a match.
+2. **No confirmation step**: a single slow response isn't reliable proof; it needs to be repeated.
+3. **Missing `break`**: after finding a matching character, the loop must stop trying the rest of the charset for that position, or it may overwrite a correct guess with a bad one.
 
 ### Fix: Baseline calibration + majority voting
 
