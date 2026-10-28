@@ -20,7 +20,7 @@ admin 1>
 This allows us to create an admin session variable.
 
 
-# Step 1 — Understanding the Application
+# Step 1: Understanding the Application
 
 We start with the credentials obtained from the previous level:
 
@@ -37,7 +37,7 @@ The application stores session information using a custom format. The session da
 
 Because of this, injecting a newline (\n) into the name parameter can cause the application to interpret additional data as another session variable.
 
-# Step 2 — Creating the Payload
+# Step 2: Creating the Payload
 
 The payload used in the exploit is:
 
@@ -59,7 +59,7 @@ admin 1>
 
 The injected admin 1 entry causes the application to treat the current session as an administrator session.
 
-# Step 3 — Sending the Request
+# Step 3: Sending the Request
 
 The first request is a POST request that submits the malicious name value.
 
@@ -78,7 +78,7 @@ The server responds by setting a session cookie. We extract that cookie using:
 
 This step is important because the session created by the first request needs to be reused in the next request.
 
-# Step 4 — Reusing the Session
+# Step 4: Reusing the Session
 
 We then send another request to the same endpoint while providing the session cookie:
 
@@ -134,12 +134,12 @@ print(d.content)
 
 This level demonstrates several important web-security concepts:
 
-- Session manipulation — User-controlled input can affect server-side session data.
+- Session manipulation: User-controlled input can affect server-side session data.
 
-- Newline injection — A newline character can sometimes be used to inject additional fields when an application uses line-based parsing.
+- Newline injection: A newline character can sometimes be used to inject additional fields when an application uses line-based parsing.
 
-- Session cookies — The session created by one request must be reused in subsequent requests.
+- Session cookies: The session created by one request must be reused in subsequent requests.
 
-- Input validation — Applications should not allow untrusted input to modify the structure of serialized session data.
+- Input validation: Applications should not allow untrusted input to modify the structure of serialized session data.
 
-- Custom serialization risks — Implementing a custom session format without safely encoding delimiters can lead to injection vulnerabilities.
+- Custom serialization risks: Implementing a custom session format without safely encoding delimiters can lead to injection vulnerabilities.
