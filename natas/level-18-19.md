@@ -1,4 +1,4 @@
-# Natas Level 19 — Writeup
+# Natas Level 19 Writeup
 
 **Challenge:** [OverTheWire Natas Wargame](http://natas.labs.overthewire.org/)
 **Level:** natas18 → natas19
@@ -28,7 +28,7 @@ The difference from natas18 becomes clear when you inspect the actual cookie val
 This looks random at first glance but it isn't. The level hint (and the challenge description itself) tells you the developers "learned their lesson" from natas18 and tried to make session IDs "more secure" by encoding them. In reality, they just **obfuscated the same weak scheme** instead of fixing it.
 
 
-## The Vulnerability — Same Bug, New Disguise
+## The Vulnerability: Same Bug, New Disguise
 
 Decoding that hex string reveals the trick:
 
@@ -51,9 +51,9 @@ This is a classic example of **security through obscurity**: encoding (hex, base
 | Obfuscation         |                None                 | Hex encoding (cosmetic only)                                                 |
 | Underlying weakness | Predictable small integer keyspace  | **Same** predictable integer keyspace, just hidden behind encoding           |
 | Exploit technique   | Iterate raw integers as cookie      | Iterate integers, **hex-encode `"<number>-admin"`** before sending as cookie |
-| Real security added |                 —                   | **None** — encoding ≠ authentication/authorization control                   |
+| Real security added |                 —                   | **None**,  encoding ≠ authentication/authorization control                   |
 
-So the "fix" the natas developers applied between levels 18 and 19 didn't actually fix anything — it just added one extra step (encoding) to the attacker's script. The vulnerability class (predictable, guessable session identifiers) is identical.
+So the "fix" the natas developers applied between levels 18 and 19 didn't actually fix anything it just added one extra step (encoding) to the attacker's script. The vulnerability class (predictable, guessable session identifiers) is identical.
 
 
 ## Script Used
@@ -90,15 +90,20 @@ print("Done!")
 
 ### How it works, line by line
 
-1. **`basicAuth`** — handles the level's HTTP Basic Auth using the natas19 site-wide credentials.
+1. **`basicAuth`**: handles the level's HTTP Basic Auth using the natas19 site-wide credentials.
+
 2. **`numberAsHex = "".join("{:02x}".format(ord(c)) for c in str(count))`**
-   Converts the current guessed user ID (e.g. `35`) into its **hex representation, character by character**. Since `str(count)` gives the digits as text (e.g. `"35"`), each character (`'3'`, `'5'`) is converted to its ASCII hex code (`33`, `35`) and joined — producing `"3335"`.
+   Converts the current guessed user ID (e.g. `35`) into its **hex representation, character by character**. Since `str(count)` gives the digits as text (e.g. `"35"`), each character (`'3'`, `'5'`) is converted to its ASCII hex code (`33`, `35`) and joined producing `"3335"`.
+
 3. **`adminPortion = "2d61646d696e"`**
-   This is the **precomputed hex encoding of the literal string `"-admin"`** (`2d`=`-`, `61`=`a`, `64`=`d`, `6d`=`m`, `69`=`i`, `6e`=`n`). It's hardcoded because it never changes — only the numeric user ID part changes per guess.
+   This is the **precomputed hex encoding of the literal string `"-admin"`** (`2d`=`-`, `61`=`a`, `64`=`d`, `6d`=`m`, `69`=`i`, `6e`=`n`). It's hardcoded because it never changes only the numeric user ID part changes per guess.
+
 4. **`sessionID = numberAsHex + adminPortion`**
-   Concatenates both hex chunks to reconstruct what the server expects for an admin session — e.g. for user `35` this becomes `33352d61646d696e`, which decodes back to `"35-admin"`.
-5. The script then **brute-forces `count` from `1` to `640`**, building this encoded cookie value each time and sending it as `PHPSESSID`, exactly like the natas18 attack — just with an extra encoding step baked into cookie construction.
-6. As soon as a request doesn't return the "regular user" message, the full response (which — since `?debug` is appended to the URL — includes the `natas20` password) gets printed.
+   Concatenates both hex chunks to reconstruct what the server expects for an admin session e.g. for user `35` this becomes `33352d61646d696e`, which decodes back to `"35-admin"`.
+
+5. The script then **brute-forces `count` from `1` to `640`**, building this encoded cookie value each time and sending it as `PHPSESSID`, exactly like the natas18 attack just with an extra encoding step baked into cookie construction.
+
+6. As soon as a request doesn't return the "regular user" message, the full response (which since `?debug` is appended to the URL includes the `natas20` password) gets printed.
 
 
 ## Manual Verification (Browser Method)
@@ -107,30 +112,30 @@ Just like in natas18, once the script identifies the working session, you can ve
 
 1. Open **DevTools → Application tab → Cookies** on the natas19 page.
 2. Replace the `PHPSESSID` value with the **hex string the script found** (e.g. `33352d61646d696e` for user `35`).
-3. Refresh the page — it should now load as the **admin session**.
-4. Append `?debug` to the URL — the debug output on the page will reveal the `natas20` password directly, matching what the script printed.
+3. Refresh the page, it should now load as the **admin session**.
+4. Append `?debug` to the URL, the debug output on the page will reveal the `natas20` password directly, matching what the script printed.
 
-This proves the same point as the script: the "obfuscated" session ID is not actually protecting anything — anyone who understands the encoding can forge a valid admin cookie by hand.
+This proves the same point as the script: the "obfuscated" session ID is not actually protecting anything anyone who understands the encoding can forge a valid admin cookie by hand.
 
 
 ## Result
 
-By hex-encoding `"<guessed number>-admin"` for every value from `1` to `640` and sending it as the `PHPSESSID` cookie, the script eventually landed on a valid admin session and revealed the `natas20` password in the debug response — confirming that encoding the session ID added no real security over natas18's plain integer scheme.
+By hex-encoding `"<guessed number>-admin"` for every value from `1` to `640` and sending it as the `PHPSESSID` cookie, the script eventually landed on a valid admin session and revealed the `natas20` password in the debug response confirming that encoding the session ID added no real security over natas18's plain integer scheme.
 
 
 ## Key Takeaways
 
-- **Encoding is not encryption, and it is not access control.** Hex, Base64, URL-encoding, etc. are all trivially reversible — they hide data from a casual glance, not from an attacker who looks even slightly closer.
-- **A weak scheme wrapped in obfuscation is still a weak scheme.** The core vulnerability (predictable sequential session identifiers, combined with a literal, guessable `-admin` marker) was never fixed between levels — it was just dressed up.
-- **Never encode secrets or authorization-relevant identifiers using reversible encoding as if it were a security control.** If a value determines a privilege level (like "admin" vs "regular user"), it must never be derivable or forgeable by the client — the *server* should track that server-side, tied to a strong, random, unguessable session token.
-- This maps to the same underlying weakness as natas18 — `CWE-330: Use of Insufficiently Random Values` — plus an added demonstration of `CWE-656: Reliance on Security Through Obscurity`.
+- **Encoding is not encryption, and it is not access control.** Hex, Base64, URL-encoding, etc. are all trivially reversible they hide data from a casual glance, not from an attacker who looks even slightly closer.
+- **A weak scheme wrapped in obfuscation is still a weak scheme.** The core vulnerability (predictable sequential session identifiers, combined with a literal, guessable `-admin` marker) was never fixed between levels it was just dressed up.
+- **Never encode secrets or authorization-relevant identifiers using reversible encoding as if it were a security control.** If a value determines a privilege level (like "admin" vs "regular user"), it must never be derivable or forgeable by the client the *server* should track that server-side, tied to a strong, random, unguessable session token.
+- This maps to the same underlying weakness as natas18 `CWE-330: Use of Insufficiently Random Values` plus an added demonstration of `CWE-656: Reliance on Security Through Obscurity`.
 
 
 ## Mitigation (Defensive Takeaway)
 
 - Use **cryptographically random, high-entropy session tokens** with no embedded/derivable meaning (no user ID, no role name, nothing an attacker could reconstruct).
-- Store the **actual authorization state (admin vs regular user) server-side**, in a session store keyed by the random token — never let the client-visible cookie itself encode privilege level in any form, encoded or not.
-- Treat any "let's just encode it" fix as a red flag during code review — encoding schemes should only ever be used for data transport/formatting, never as a substitute for authentication or authorization logic.
+- Store the **actual authorization state (admin vs regular user) server-side**, in a session store keyed by the random token never let the client-visible cookie itself encode privilege level in any form, encoded or not.
+- Treat any "let's just encode it" fix as a red flag during code review encoding schemes should only ever be used for data transport/formatting, never as a substitute for authentication or authorization logic.
 
 
 *Writeup for educational purposes as part of the OverTheWire Natas wargame series.*
