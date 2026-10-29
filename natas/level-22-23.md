@@ -1,8 +1,8 @@
 # Natas Level 23 — Writeup
 
-**Challenge:** [OverTheWire: Natas — Level 23](http://natas23.natas.labs.overthewire.org)
+**Challenge:** [OverTheWire: Natas Level 23](http://natas23.natas.labs.overthewire.org)
 **Category:** Web Exploitation / PHP Type Juggling & Loose Comparison
-**Tools used:** Just a browser — no Burp Suite or interception needed for this level
+**Tools used:** Just a browser, no Burp Suite or interception needed for this level
 
 
 ## 1. Challenge Overview
@@ -28,8 +28,8 @@ Unlike the earlier levels, this one doesn't require intercepting or modifying tr
 
 Two conditions must both evaluate to `true`:
 
-1. `strstr($_REQUEST["passwd"], "iloveyou")` — the input must **contain** the substring `"iloveyou"` somewhere in it.
-2. `$_REQUEST["passwd"] > 10` — the input, compared as if it were a number, must come out greater than 10.
+1. `strstr($_REQUEST["passwd"], "iloveyou")`: the input must **contain** the substring `"iloveyou"` somewhere in it.
+2. `$_REQUEST["passwd"] > 10`: the input, compared as if it were a number, must come out greater than 10.
 
 At first glance these look mutually exclusive how can a value be "a number greater than 10" and also "a string containing a word"? PHP's type juggling makes both possible at once.
 
