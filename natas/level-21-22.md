@@ -1,10 +1,10 @@
 # Natas Level 21-22 
 
-**Challenge:** [OverTheWire: Natas — Level 22](http://natas22.natas.labs.overthewire.org)
+**Challenge:** [OverTheWire: Natas Level 22](http://natas22.natas.labs.overthewire.org)
 **Category:** Web Exploitation / Improper Redirect Handling
 **Tools used:** Burp Suite (Community Edition)
 
-*(Credentials to reach this level were obtained via the Level 21 session-sharing trick — see the Natas21 writeup.)*
+*(Credentials to reach this level were obtained via the Level 21 session-sharing trick, see the Natas21 writeup.)*
 
 
 ## 1. Challenge Overview
@@ -23,13 +23,13 @@ That 302 status is the whole hint: a redirect was issued from server-side PHP vi
 
 ## 3. Exploitation Steps (Burp Suite)
 
-### Step 1 — Capture a request in Proxy
+### Step 1: Capture a request in Proxy
 Log in via Basic Auth and load the natas22 page once with the Proxy intercepting, so it lands in **HTTP History**.
 
-### Step 2 — Send to Repeater
+### Step 2: Send to Repeater
 Send the request to Repeater to control it manually and inspect the *raw* response, rather than letting a browser auto-follow the redirect.
 
-### Step 3 — Add the parameters that unlock the admin branch
+### Step 3: Add the parameters that unlock the admin branch
 Based on testing, the request that returns the flag in-body was:
 
 ```
@@ -42,7 +42,7 @@ Cookie: PHPSESSID=<session id>
 - `revelio` acts as a "reveal" flag the server checks for.
 - `admin=1` mirrors the same pattern from Level 21, a client-supplied value that ends up influencing `$_SESSION['admin']` with no server-side authorization check.
 
-### Step 4 — Send and read the raw response
+### Step 4: Send and read the raw response
 Even though the **status code is still 302** (a redirect is issued), the response **body** visible in Burp's Pretty/Raw view, contains the full page HTML, including:
 
 ```html
