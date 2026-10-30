@@ -1,7 +1,7 @@
-# Natas 24 - 25 — OverTheWire Wargame Writeup
+# Natas 24 - 25 OverTheWire Wargame Writeup
 
 ## Challenge
-Natas25 has a `lang` parameter that filters out `../` to prevent path traversal, but the filter isn't recursive — so `....//` becomes `../` once the inner pattern is stripped, allowing traversal outside the intended directory.
+Natas25 has a `lang` parameter that filters out `../` to prevent path traversal, but the filter isn't recursive so `....//` becomes `../` once the inner pattern is stripped, allowing traversal outside the intended directory.
 
 ## Vulnerability
 The application logs each request (including the `User-Agent` header) to a file named:
