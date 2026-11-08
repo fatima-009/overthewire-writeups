@@ -107,7 +107,7 @@ Once `file` reports ASCII text:
     bandit12@bandit:/tmp/random_dir$ file <final file>
     <final file>: ASCII text
     bandit12@bandit:/tmp/random_dir$ cat <final file>
-    The password is <natas_13_password>
+    The password is <bandit13_password>
 ```
 
 ## Key Takeaways
