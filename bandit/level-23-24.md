@@ -64,14 +64,14 @@ The script runs **every minute as `bandit24`**.
 
 What the script does:
 
-|           Part              |                      Explanation                          |
+    |           Part              |                      Explanation                          |
 
-| `cd /var/spool/$myname/foo` | Moves into `/var/spool/bandit24/foo`                      |
-| `for i in * .*`             | Loops over every file in that directory                   |
-| `stat --format "%U"`        | Gets the file's owner                                     |
-| `if owner = bandit23`       | Only runs files **owned by bandit23** (that is us)        |
-| `timeout -s 9 60 ./$i`      | Runs the file, killing it after 60 seconds                |
-| `rm -f ./$i`                | Deletes every file afterward, which is why we keep a copy |
+    | `cd /var/spool/$myname/foo` | Moves into `/var/spool/bandit24/foo`                      |
+    | `for i in * .*`             | Loops over every file in that directory                   |
+    | `stat --format "%U"`        | Gets the file's owner                                     |
+    | `if owner = bandit23`       | Only runs files **owned by bandit23** (that is us)        |
+    | `timeout -s 9 60 ./$i`      | Runs the file, killing it after 60 seconds                |
+    | `rm -f ./$i`                | Deletes every file afterward, which is why we keep a copy |
 
 So any executable script we place in `/var/spool/bandit24/foo` will be run as
 `bandit24` within a minute.
@@ -120,14 +120,14 @@ Wait up to a minute for the cron job to run, then:
 
 ## Troubleshooting
 
-| Problem | Cause / Fix |
+    |                     Problem                       |                                  Cause / Fix                                         
 
-- `password` file never appears | The cron job may not have run yet (wait a full minute), the script is not executable (`chmod +x`), or the directory is not writable by bandit24 (`chmod 777`). 
+    | `password` file never appears                     | The cron job may not have run yet (wait a full minute), the script is not executable (`chmod +x`), or the directory is not writable by bandit24 (`chmod 777`).   
 
-- Script disappears from `/var/spool/bandit24/foo/` | Expected. The cron job deletes every script after running it. 
+    | Script disappears from `/var/spool/bandit24/foo/` | Expected. The cron job deletes every script after running it.                       
 
-- `Permission denied` when copying | Check the path: `/var/spool/bandit24/foo/`. 
+    | `Permission denied` when copying                  | Check the path: `/var/spool/bandit24/foo/`.                                          
 
-- `password` is created but empty | Check the script's path to `/etc/bandit_pass/bandit24` and the shebang line. 
+    | `password` is created but empty                   | Check the script's path to `/etc/bandit_pass/bandit24` and the shebang line.         
 
-- Cannot read `password` | Make it readable: add `chmod 644 /tmp/tmp.XXXXXXXXXX/password` to the end of the script. 
+    | Cannot read `password`                            | Make it readable: add `chmod 644 /tmp/tmp.XXXXXXXXXX/password` to the end of the script.                                                                              
